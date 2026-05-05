@@ -7,9 +7,19 @@ import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Cloc
 type TabType = 'pagados' | 'intentos' | 'taquilla' | 'crear-viaje' | 'paqueteria' | 'tarifario';
 
 const BONILLA_ROUTE = [
-  "Durango", "Nombre de Dios", "Vicente Guerrero", "Sombrerete", 
-  "Río Florido", "Fresnillo", "Zacatecas", "Aguascalientes", 
-  "San Juan de los Lagos", "Guadalajara"
+  "Durango", 
+  "Nombre de Dios", 
+  "Vicente Guerrero", 
+  "Sombrerete", 
+  "San José de Fénix", 
+  "Sain Alto", 
+  "Río Florido", 
+  "Fresnillo", 
+  "Calera",
+  "Zacatecas", 
+  "Aguascalientes", 
+  "San Juan de los Lagos", 
+  "Guadalajara"
 ];
 
 export default function AdminDashboard() {
@@ -30,7 +40,7 @@ export default function AdminDashboard() {
   const [endDate, setEndDate] = useState('');
 
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
-  const [tripForm, setTripForm] = useState({ origin: 'Durango', destination: 'Guadalajara', date: '', departure_time: '', arrival_time: '', total_seats: '40', bus_type: 'Primera Clase' });
+  const [tripForm, setTripForm] = useState({ origin: 'Durango', destination: 'Guadalajara', date: '', departure_time: '', arrival_time: '', total_seats: '40', bus_type: 'Primera Clase', price_15_days: '' });
   const [cityPrices, setCityPrices] = useState<Record<string, string>>({});
   const [cityRoundPrices, setCityRoundPrices] = useState<Record<string, string>>({});
 
@@ -45,7 +55,7 @@ export default function AdminDashboard() {
   const [taquillaSelectedTrip, setTaquillaSelectedTrip] = useState<any>(null);
   const [taquillaOccupiedSeats, setTaquillaOccupiedSeats] = useState<number[]>([]);
   const [taquillaSelectedSeats, setTaquillaSelectedSeats] = useState<number[]>([]);
-  const [taquillaPassenger, setTaquillaPassenger] = useState({ name: '', phone: '', status: 'confirmed', priceOverride: '', isRoundTrip: false });
+  const [taquillaPassenger, setTaquillaPassenger] = useState({ name: '', phone: '', status: 'confirmed', priceOverride: '', tripType: 'sencillo' });
   const [isSelling, setIsSelling] = useState(false);
 
   useEffect(() => {
@@ -79,7 +89,7 @@ export default function AdminDashboard() {
   const fetchRealData = async () => {
     setLoading(true);
     try {
-      const { data: bookingsData } = await supabase.from('bookings').select('id, booking_ref, folio, status, created_at, total_price, passenger_name, is_round_trip, payment_method').order('created_at', { ascending: false });
+      const { data: bookingsData } = await supabase.from('bookings').select('id, booking_ref, folio, status, created_at, total_price, passenger_name, is_round_trip, is_15_days, payment_method, destination, seats, trip:trips!bookings_trip_id_fkey(date, departure_time)').order('created_at', { ascending: false });
       if (bookingsData) {
         const formateados = bookingsData.map((b: any) => {
           const fechaBD = new Date(b.created_at);
@@ -95,10 +105,18 @@ export default function AdminDashboard() {
           if (metodoPagoUI.includes('card')) metodoPagoUI = 'Tarjeta';
           else if (metodoPagoUI.includes('cash')) metodoPagoUI = 'Efectivo';
 
+          let tipoViaje = 'Viaje Sencillo';
+          if (b.is_15_days) tipoViaje = 'Paquete 15 Días';
+          else if (b.is_round_trip) tipoViaje = 'Viaje Redondo';
+
           return {
-            id: b.id, folio: b.booking_ref || `FOLIO-${b.folio}`, tipo: b.is_round_trip ? 'Viaje (Ida y Vuelta)' : 'Viaje de Autobús', 
+            id: b.id, folio: b.booking_ref || `FOLIO-${b.folio}`, tipo: tipoViaje, 
             cliente: b.passenger_name || 'Sin nombre', monto: b.total_price || 0, status: estadoUI,
-            metodoPago: metodoPagoUI, fechaCompleta: fechaBD.toLocaleString(), dateOnly: dateOnly
+            metodoPago: metodoPagoUI, fechaCompleta: fechaBD.toLocaleString(), dateOnly: dateOnly,
+            destino: b.destination || 'N/A',
+            asientos: b.seats || [],
+            fechaViaje: b.trip?.date || 'Fecha por definir',
+            horaViaje: b.trip?.departure_time || 'Hora por definir'
           };
         });
         setData(formateados);
@@ -164,8 +182,10 @@ export default function AdminDashboard() {
     setTaquillaSelectedSeats([]);
 
     let baseP = trip.price;
-    if (taquillaPassenger.isRoundTrip) {
+    if (taquillaPassenger.tripType === 'redondo') {
       if (trip.round_trip_prices && trip.round_trip_prices[taquillaForm.destination]) baseP = Number(trip.round_trip_prices[taquillaForm.destination]);
+    } else if (taquillaPassenger.tripType === '15_dias') {
+      if (trip.price_15_days) baseP = Number(trip.price_15_days);
     } else {
       if (trip.prices && trip.prices[taquillaForm.destination]) baseP = Number(trip.prices[taquillaForm.destination]);
     }
@@ -174,19 +194,17 @@ export default function AdminDashboard() {
     setTaquillaSelectedTrip(trip);
   };
 
-  const toggleTaquillaRoundTrip = (checked: boolean) => {
-    setTaquillaPassenger(prev => ({ ...prev, isRoundTrip: checked }));
+  const handleTaquillaTripTypeChange = (type: string) => {
+    setTaquillaPassenger(prev => ({ ...prev, tripType: type }));
     
     if (taquillaSelectedTrip) {
       let newP = taquillaSelectedTrip.price;
-      if (checked) {
-        if (taquillaSelectedTrip.round_trip_prices && taquillaSelectedTrip.round_trip_prices[taquillaForm.destination]) {
-          newP = Number(taquillaSelectedTrip.round_trip_prices[taquillaForm.destination]);
-        }
-      } else {
-        if (taquillaSelectedTrip.prices && taquillaSelectedTrip.prices[taquillaForm.destination]) {
-          newP = Number(taquillaSelectedTrip.prices[taquillaForm.destination]);
-        }
+      if (type === 'redondo' && taquillaSelectedTrip.round_trip_prices && taquillaSelectedTrip.round_trip_prices[taquillaForm.destination]) {
+        newP = Number(taquillaSelectedTrip.round_trip_prices[taquillaForm.destination]);
+      } else if (type === '15_dias' && taquillaSelectedTrip.price_15_days) {
+        newP = Number(taquillaSelectedTrip.price_15_days);
+      } else if (type === 'sencillo' && taquillaSelectedTrip.prices && taquillaSelectedTrip.prices[taquillaForm.destination]) {
+        newP = Number(taquillaSelectedTrip.prices[taquillaForm.destination]);
       }
       setTaquillaPassenger(prev => ({ ...prev, priceOverride: newP.toString() }));
     }
@@ -214,7 +232,9 @@ export default function AdminDashboard() {
         total_price: unitPrice * taquillaSelectedSeats.length,
         origin: taquillaForm.origin, 
         destination: taquillaForm.destination,
-        is_round_trip: taquillaPassenger.isRoundTrip 
+        seats: taquillaSelectedSeats,
+        is_round_trip: taquillaPassenger.tripType === 'redondo',
+        is_15_days: taquillaPassenger.tripType === '15_dias'
       });
 
       if (error) throw error;
@@ -275,11 +295,12 @@ export default function AdminDashboard() {
       const { error } = await supabase.from("trips").insert({
         origin: tripForm.origin, destination: tripForm.destination, date: tripForm.date, departure_time: tripForm.departure_time, arrival_time: tripForm.arrival_time, 
         duration: "Aprox 8h", price: basePrice, prices: cityPrices, round_trip_prices: cityRoundPrices, 
+        price_15_days: Number(tripForm.price_15_days) || 0,
         total_seats: Number(tripForm.total_seats), available_seats: Number(tripForm.total_seats), occupied_seats: [], bus_type: tripForm.bus_type, amenities: ["WiFi", "A/C", "WC"],
       });
       if (error) throw error;
       alert("¡Viaje publicado!");
-      setTripForm({ ...tripForm, date: "", departure_time: "", arrival_time: "" }); 
+      setTripForm({ ...tripForm, date: "", departure_time: "", arrival_time: "", price_15_days: "" }); 
     } catch (error: any) { alert("Error: " + error.message); } finally { setIsCreatingTrip(false); }
   };
 
@@ -326,7 +347,6 @@ export default function AdminDashboard() {
     );
   }
 
-  // --- FILTROS DE LA TABLA ---
   const filteredByDate = data.filter((item) => {
     if (!startDate || !endDate) return true; 
     return item.dateOnly >= startDate && item.dateOnly <= endDate;
@@ -340,7 +360,6 @@ export default function AdminDashboard() {
 
   const ingresosDelFiltro = filteredByDate.filter(item => item.status === 'pagado').reduce((acc, curr) => acc + curr.monto, 0);
 
-  // --- LA FUNCIÓN RESTAURADA QUE FALTABA ---
   const handleExportCSV = () => {
     const headers = "Folio,Estado,Concepto,Pasajero,Método de Pago,Fecha/Hora,Monto\n";
     const rows = finalFilteredData.map(item => `${item.folio},${item.status},${item.tipo},"${item.cliente}",${item.metodoPago},"${item.fechaCompleta}",${item.monto}`).join("\n");
@@ -356,23 +375,100 @@ export default function AdminDashboard() {
 
   const printTicket = (item: any) => {
     if (item.status !== 'pagado') { alert("Solo se pueden generar tickets de compras pagadas."); return; }
-    const printWindow = window.open('', '', 'width=400,height=600');
+    const printWindow = window.open('', '', 'width=400,height=800');
     if (!printWindow) return;
     const html = `<html><head><title>Ticket ${item.folio}</title><style>
-        body { font-family: monospace; padding: 20px; color: #000; width: 300px; margin: auto; }
+        body { font-family: monospace; padding: 20px; color: #000; width: 300px; margin: auto; min-height: 800px; }
         .header { text-align: center; margin-bottom: 20px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
         .row { display: flex; justify-content: space-between; margin-bottom: 8px; }
         .total { font-size: 1.2em; font-weight: bold; border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
-        .footer { text-align: center; margin-top: 30px; font-size: 0.9em; }
+        .footer { text-align: center; margin-top: 40px; font-size: 0.9em; padding-bottom: 50px; }
       </style></head><body>
-        <div class="header"><h2>BONILLA TOURS</h2><p>RFC: XXXXXXXX<br/>Durango, Dgo.</p></div>
+        <div class="header"><h2>BONILLA TOURS</h2></div>
         <div class="row"><span>Referencia:</span> <strong>${item.folio}</strong></div>
-        <div class="row"><span>Fecha:</span> <span>${item.fechaCompleta}</span></div>
+        <div class="row"><span>Fecha Venta:</span> <span>${item.fechaCompleta}</span></div>
         <div class="row"><span>Pasajero:</span> <span>${item.cliente}</span></div>
+        <div class="row"><span>Destino:</span> <span>${item.destino}</span></div>
         <div class="row"><span>Concepto:</span> <span>${item.tipo}</span></div>
         <div class="row"><span>Pago con:</span> <span>${item.metodoPago}</span></div>
         <div class="row total"><span>TOTAL:</span> <span>$${Number(item.monto).toFixed(2)}</span></div>
         <div class="footer"><p>¡Gracias por su preferencia!</p></div>
+        <script>window.onload = function() { window.print(); window.close(); }</script>
+      </body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+  };
+
+  const printBoleto = (item: any) => {
+    if (item.status !== 'pagado') { alert("Solo se pueden generar boletos de compras pagadas."); return; }
+    const printWindow = window.open('', '', 'width=800,height=1000');
+    if (!printWindow) return;
+    const html = `<html><head><title>Boleto ${item.folio}</title><style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: auto; }
+        .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 20px; }
+        .header img { max-width: 280px; margin-bottom: 10px; }
+        .header h2 { margin: 5px 0 0 0; color: #555; font-size: 18px; letter-spacing: 2px; }
+        .content { display: flex; justify-content: space-between; }
+        .info { width: 65%; }
+        .qr-section { width: 30%; text-align: center; }
+        .qr-section img { width: 150px; height: 150px; margin-bottom: 10px; }
+        .row { margin-bottom: 15px; }
+        .label { font-size: 12px; color: #777; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 2px; }
+        .value { font-size: 18px; font-weight: bold; color: #000; }
+        .highlight { background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #b91c1c; }
+        .terms { margin-top: 40px; font-size: 11px; color: #555; border-top: 1px solid #ccc; padding-top: 20px; text-align: justify; line-height: 1.5; }
+        .terms h4 { margin-top: 0; color: #000; font-size: 14px; }
+      </style></head><body>
+        <div class="header">
+          <img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" alt="Bonilla Tours" />
+          <h2>BOLETO REGULAR</h2>
+        </div>
+        <div class="content">
+          <div class="info">
+            <div class="row">
+              <span class="label">Pasajero/a</span>
+              <span class="value">${item.cliente}</span>
+            </div>
+            <div class="row highlight">
+              <span class="label">Hasta</span>
+              <span class="value" style="font-size: 24px;">${item.destino}</span>
+            </div>
+            <div class="row">
+              <span class="label">Fecha y hora de viaje</span>
+              <span class="value">${item.fechaViaje} - ${item.horaViaje}</span>
+            </div>
+            <div class="row">
+              <span class="label">Viaje</span>
+              <span class="value">Destino: ${item.destino} | ${item.tipo}</span>
+            </div>
+            <div class="row" style="display: flex; gap: 40px;">
+              <div>
+                <span class="label">Asiento(s)</span>
+                <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span>
+              </div>
+              <div>
+                <span class="label">Total Pagado</span>
+                <span class="value">$ ${Number(item.monto).toFixed(2)} MXN</span>
+              </div>
+            </div>
+          </div>
+          <div class="qr-section">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${item.folio}" alt="QR Code" />
+            <div class="label">Folio de Reserva</div>
+            <div class="value" style="font-size: 16px;">${item.folio}</div>
+            <div style="margin-top: 20px; font-size: 12px; color: #666;">
+              <strong>Emitido:</strong><br/>${item.fechaCompleta}
+            </div>
+          </div>
+        </div>
+        <div class="terms">
+          <h4>TÉRMINOS Y CONDICIONES</h4>
+          <p>Deberá presentarse por lo menos 20 minutos antes del horario seleccionado en el punto de encuentro establecido en su reservación o itinerario.</p>
+          <p>Para abordar, deberá presentar el código QR de su reservación o el folio impreso en este boleto.</p>
+          <p>Para garantizar que los usuarios lleguen a tiempo a su destino, únicamente otorgamos 5 minutos de tolerancia en espera. Una vez transcurrido ese tiempo, el conductor dará comienzo al viaje. Situaciones excepcionales se valorarán y gestionarán de mutuo acuerdo entre empresa y usuarios.</p>
+          <p>Cabe tener en cuenta que algún punto de encuentro o descenso puede cambiar a causa de situaciones ajenas a la empresa, tales como obras, bloqueos, accidentes etc. En tal caso, se les informará a los usuarios con antelación si ello fuera posible. De otro modo, se acordará con los usuarios una opción conveniente.</p>
+          <h4 style="margin-top: 15px;">Cancelaciones</h4>
+          <p>Las cancelaciones tienen un costo del 10% (trámite exclusivo en oficina) y aplican siempre y cuando se soliciten con al menos 1 hora de anticipación a la salida.</p>
+        </div>
         <script>window.onload = function() { window.print(); window.close(); }</script>
       </body></html>`;
     printWindow.document.write(html); printWindow.document.close();
@@ -472,17 +568,17 @@ export default function AdminDashboard() {
                 </div>
 
                 <form onSubmit={handleSellTicket} className="space-y-4">
-                  <div className="flex items-center gap-2 mb-4 bg-gray-50 p-3 rounded-lg border">
-                    <input 
-                      type="checkbox" 
-                      id="roundTrip"
-                      checked={taquillaPassenger.isRoundTrip}
-                      onChange={(e) => toggleTaquillaRoundTrip(e.target.checked)}
-                      className="w-5 h-5 text-emerald-600 cursor-pointer"
-                    />
-                    <label htmlFor="roundTrip" className="text-sm font-bold text-gray-800 cursor-pointer">
-                      Vender como Viaje Redondo (Aplica Tarifa Especial)
-                    </label>
+                  <div className="mb-4 bg-gray-50 p-3 rounded-lg border">
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Tipo de Boleto</label>
+                    <select
+                      value={taquillaPassenger.tripType}
+                      onChange={(e) => handleTaquillaTripTypeChange(e.target.value)}
+                      className="w-full border rounded-lg p-2 text-sm font-semibold text-emerald-800 bg-white"
+                    >
+                      <option value="sencillo">Viaje Sencillo</option>
+                      <option value="redondo">Viaje Redondo (Ida y Vuelta)</option>
+                      <option value="15_dias">Paquete 15 Días (Regreso Abierto)</option>
+                    </select>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -563,6 +659,19 @@ export default function AdminDashboard() {
                 <div><label className="block text-sm font-bold text-gray-700 mb-1">Fecha Salida</label><input type="date" required value={tripForm.date} onChange={(e) => setTripForm({...tripForm, date: e.target.value})} className="w-full border rounded-lg p-2" /></div>
                 <div><label className="block text-sm font-bold text-gray-700 mb-1">Hora Salida</label><input type="time" required value={tripForm.departure_time} onChange={(e) => setTripForm({...tripForm, departure_time: e.target.value})} className="w-full border rounded-lg p-2" /></div>
               </div>
+              
+              <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl flex items-center gap-4">
+                <div className="bg-purple-100 p-3 rounded-full"><CalendarDays className="text-purple-600" size={24} /></div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-purple-900">Paquete de 15 Días (Ruta Completa)</h3>
+                  <p className="text-xs text-purple-700">Aplica para los pasajeros que compren este tipo de boleto sin fecha de regreso definida.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-purple-800 mb-1">Precio Especial ($)</label>
+                  <input type="number" value={tripForm.price_15_days} onChange={(e) => setTripForm({...tripForm, price_15_days: e.target.value})} className="w-32 border border-purple-300 rounded-lg p-2 text-sm font-bold text-purple-900 bg-white" placeholder="Ej. 1200" />
+                </div>
+              </div>
+
               <div className="border rounded-xl overflow-hidden">
                 <div className="bg-blue-900 px-4 py-3 text-white font-bold flex justify-between items-center"><span>Precios Dinámicos: {tripForm.origin} ➔ {tripForm.destination}</span><span className="text-xs font-normal bg-blue-800 px-3 py-1 rounded border border-blue-700">Llenado Automático</span></div>
                 <div className="p-4 space-y-3 bg-white">
@@ -654,7 +763,7 @@ export default function AdminDashboard() {
               <div className="overflow-x-auto max-h-[600px]">
                 <table className="w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-white text-gray-500 font-medium border-b sticky top-0">
-                    <tr><th className="px-6 py-4">Ref/Folio</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4">Concepto</th><th className="px-6 py-4">Pasajero</th><th className="px-6 py-4">Método</th><th className="px-6 py-4">Fecha/Hora</th><th className="px-6 py-4 text-right">Monto</th><th className="px-6 py-4 text-center">Acción</th></tr>
+                    <tr><th className="px-6 py-4">Ref/Folio</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4">Concepto</th><th className="px-6 py-4">Pasajero</th><th className="px-6 py-4">Método</th><th className="px-6 py-4">Fecha/Hora</th><th className="px-6 py-4 text-right">Monto</th><th className="px-6 py-4 text-center">Acciones</th></tr>
                   </thead>
                   <tbody className="divide-y text-gray-800">
                     {finalFilteredData.length === 0 ? (
@@ -680,8 +789,11 @@ export default function AdminDashboard() {
                                 <CheckSquare size={18} />
                               </button>
                             )}
-                            <button onClick={() => printTicket(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-blue-600 hover:bg-blue-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title={item.status === 'pagado' ? 'Imprimir Boleto' : 'Solo pagados'}>
+                            <button onClick={() => printTicket(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-blue-600 hover:bg-blue-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title={item.status === 'pagado' ? 'Imprimir Recibo Corto (Ticket)' : 'Solo pagados'}>
                               <Printer size={18} />
+                            </button>
+                            <button onClick={() => printBoleto(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-purple-600 hover:bg-purple-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title={item.status === 'pagado' ? 'Imprimir Boleto Abordaje (PDF)' : 'Solo pagados'}>
+                              <Ticket size={18} />
                             </button>
                           </td>
                         </tr>

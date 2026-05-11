@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase'; 
-import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare } from 'lucide-react';
+import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare, History } from 'lucide-react';
 
-type TabType = 'pagados' | 'intentos' | 'taquilla' | 'crear-viaje' | 'paqueteria' | 'tarifario';
+type TabType = 'pagados' | 'intentos' | 'taquilla' | 'crear-viaje' | 'paqueteria' | 'tarifario' | 'movimientos';
 
 const BONILLA_ROUTE = [
   "Durango", 
@@ -25,6 +25,8 @@ const BONILLA_ROUTE = [
 export default function AdminDashboard() {
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [userRole, setUserRole] = useState<'admin' | 'supervisor'>('supervisor');
+  
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -32,6 +34,7 @@ export default function AdminDashboard() {
   const [data, setData] = useState<any[]>([]);
   const [parcels, setParcels] = useState<any[]>([]);
   const [defaultPrices, setDefaultPrices] = useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
   
@@ -50,6 +53,7 @@ export default function AdminDashboard() {
   const [priceForm, setPriceForm] = useState({ origin: 'Durango', destination: 'Guadalajara', price_one_way: '', price_round_trip: '' });
 
   // --- ESTADOS: TAQUILLA ---
+  const [taquillaSaleDate, setTaquillaSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [taquillaForm, setTaquillaForm] = useState({ origin: 'Durango', destination: 'Guadalajara', date: '' });
   const [taquillaTrips, setTaquillaTrips] = useState<any[]>([]);
   const [taquillaSelectedTrip, setTaquillaSelectedTrip] = useState<any>(null);
@@ -57,6 +61,20 @@ export default function AdminDashboard() {
   const [taquillaSelectedSeats, setTaquillaSelectedSeats] = useState<number[]>([]);
   const [taquillaPassenger, setTaquillaPassenger] = useState({ name: '', phone: '', status: 'confirmed', priceOverride: '', tripType: 'sencillo' });
   const [isSelling, setIsSelling] = useState(false);
+
+  // --- ESTADOS: REGISTRO HISTÓRICO ---
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isSavingHistory, setIsSavingHistory] = useState(false);
+  const [historyForm, setHistoryForm] = useState({
+    saleDate: new Date().toISOString().split('T')[0],
+    tripDate: new Date().toISOString().split('T')[0],
+    origin: 'Durango',
+    destination: 'Zacatecas',
+    name: '',
+    price: '',
+    seats: '',
+    tripType: 'sencillo'
+  });
 
   useEffect(() => {
     setIsClient(true);
@@ -69,12 +87,23 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    if (session) fetchRealData();
+    if (session) {
+      if (session.user.email === 'admin@bonillatours.com' || session.user.email?.includes('admin')) {
+        setUserRole('admin');
+      } else {
+        setUserRole('supervisor');
+      }
+      fetchRealData();
+    }
   }, [session]);
 
   useEffect(() => {
     if (defaultPrices.length > 0) autoFillPrices(tripForm.origin, tripForm.destination, defaultPrices);
   }, [defaultPrices, tripForm.origin, tripForm.destination]);
+
+  useEffect(() => {
+    if (activeTab === 'movimientos') fetchLogs();
+  }, [activeTab]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,10 +115,37 @@ export default function AdminDashboard() {
 
   const handleLogout = async () => await supabase.auth.signOut();
 
+  const logAction = async (action: string, description: string) => {
+    if (!session) return;
+    try {
+      await supabase.from('audit_logs').insert({
+        user_email: session.user.email,
+        action,
+        description
+      });
+    } catch (error) {
+      console.error("Error guardando registro de auditoría:", error);
+    }
+  };
+
+  const fetchLogs = async () => {
+    const { data } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1500); 
+    if (data) setLogs(data);
+  };
+
   const fetchRealData = async () => {
     setLoading(true);
     try {
-      const { data: bookingsData } = await supabase.from('bookings').select('id, booking_ref, folio, status, created_at, total_price, passenger_name, is_round_trip, is_15_days, payment_method, destination, seats, trip:trips!bookings_trip_id_fkey(date, departure_time)').order('created_at', { ascending: false });
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('id, booking_ref, folio, status, created_at, total_price, passenger_name, is_round_trip, is_15_days, payment_method, destination, seats, trip:trips!bookings_trip_id_fkey(date, departure_time)')
+        .order('created_at', { ascending: false })
+        .limit(1500);
+
       if (bookingsData) {
         const formateados = bookingsData.map((b: any) => {
           const fechaBD = new Date(b.created_at);
@@ -121,22 +177,110 @@ export default function AdminDashboard() {
         });
         setData(formateados);
       }
-      const { data: parcelsData } = await supabase.from('parcels').select('*').order('created_at', { ascending: false });
+      const { data: parcelsData } = await supabase
+        .from('parcels')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1500);
       if (parcelsData) setParcels(parcelsData);
+      
       const { data: pricesData } = await supabase.from('route_prices').select('*');
       if (pricesData) setDefaultPrices(pricesData);
     } catch (err) { console.error("Error:", err); } finally { setLoading(false); }
   };
 
   const handleMarkAsPaid = async (bookingId: string, folio: string) => {
+    if (userRole !== 'admin') return alert("Solo los administradores pueden confirmar pagos en sistema.");
     if (!window.confirm(`¿Confirmas que recibiste el pago en efectivo para el boleto ${folio}?`)) return;
     try {
       const { error } = await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', bookingId);
       if (error) throw error;
+      await logAction('EDITAR_PAGO', `Confirmó pago en efectivo para el folio ${folio}`);
       alert("¡Boleto marcado como pagado!");
       fetchRealData();
     } catch (error: any) {
       alert("Error al actualizar: " + error.message);
+    }
+  };
+
+  // --- LÓGICA DE REGISTRO HISTÓRICO ---
+  const handleSaveHistoricalBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingHistory(true);
+
+    try {
+      // 1. Buscar si ya existe un viaje para esa fecha y ruta
+      let currentTripId = null;
+      const { data: existingTrips } = await supabase
+        .from('trips')
+        .select('id')
+        .eq('date', historyForm.tripDate)
+        .eq('origin', historyForm.origin)
+        .eq('destination', historyForm.destination)
+        .limit(1);
+
+      if (existingTrips && existingTrips.length > 0) {
+        currentTripId = existingTrips[0].id;
+      } else {
+        // 2. Si no existe, CREAMOS el viaje histórico automáticamente
+        const { data: newTrip, error: tripError } = await supabase.from('trips').insert({
+          origin: historyForm.origin,
+          destination: historyForm.destination,
+          date: historyForm.tripDate,
+          departure_time: '12:00', // Horario genérico para históricos
+          arrival_time: '18:00',
+          duration: 'Histórico',
+          price: Number(historyForm.price) || 0,
+          total_seats: 40,
+          available_seats: 40,
+          occupied_seats: [],
+          bus_type: 'Registro Histórico',
+          amenities: []
+        }).select('id').single();
+
+        if (tripError) throw new Error("Error creando viaje histórico: " + tripError.message);
+        currentTripId = newTrip.id;
+      }
+
+      // 3. Procesar asientos (si dejaron vacío, ponemos el asiento [0] simbólico)
+      const seatsArray = historyForm.seats.trim() !== '' 
+        ? historyForm.seats.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
+        : [0];
+
+      // 4. Crear el Boleto (Booking)
+      const bookingRef = "OLD-" + Math.floor(100000 + Math.random() * 900000).toString().slice(0, 6);
+      
+      const { error: bookingError } = await supabase.from('bookings').insert({
+        booking_ref: bookingRef,
+        trip_id: currentTripId,
+        passenger_name: historyForm.name,
+        passenger_email: 'historico@bonillatours.com',
+        passenger_phone: '0000000000',
+        payment_method: 'cash',
+        status: 'confirmed', // Siempre confirmado porque ya pasó
+        is_guest: true,
+        total_price: Number(historyForm.price) || 0,
+        origin: historyForm.origin,
+        destination: historyForm.destination,
+        seats: seatsArray,
+        is_round_trip: historyForm.tripType === 'redondo',
+        is_15_days: historyForm.tripType === '15_dias',
+        created_at: new Date(`${historyForm.saleDate}T12:00:00Z`).toISOString()
+      });
+
+      if (bookingError) throw new Error("Error creando boleto: " + bookingError.message);
+
+      await logAction('REGISTRO_HISTORICO', `Subió boleto pasado ${bookingRef} de ${historyForm.name}`);
+      alert("¡Boleto histórico registrado exitosamente!");
+      
+      setShowHistoryModal(false);
+      setHistoryForm({ ...historyForm, name: '', price: '', seats: '' });
+      fetchRealData(); // Refrescar tabla
+
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setIsSavingHistory(false);
     }
   };
 
@@ -234,10 +378,13 @@ export default function AdminDashboard() {
         destination: taquillaForm.destination,
         seats: taquillaSelectedSeats,
         is_round_trip: taquillaPassenger.tripType === 'redondo',
-        is_15_days: taquillaPassenger.tripType === '15_dias'
+        is_15_days: taquillaPassenger.tripType === '15_dias',
+        created_at: new Date(`${taquillaSaleDate}T12:00:00Z`).toISOString() // Fecha manual
       });
 
       if (error) throw error;
+      await logAction('CREAR_BOLETO', `Emitió boleto ${bookingRef} en taquilla para ${taquillaPassenger.name} el día ${taquillaSaleDate}`);
+      
       alert(`¡Venta Exitosa! Folio: ${bookingRef}`);
       setTaquillaSelectedTrip(null);
       fetchRealData();
@@ -258,9 +405,11 @@ export default function AdminDashboard() {
       const existe = defaultPrices.find(p => (p.origin === priceForm.origin && p.destination === priceForm.destination) || (p.origin === priceForm.destination && p.destination === priceForm.origin));
       if (existe) {
         await supabase.from('route_prices').update({ price_one_way: Number(priceForm.price_one_way), price_round_trip: Number(priceForm.price_round_trip) }).eq('id', existe.id);
+        await logAction('EDITAR_PRECIO', `Actualizó tarifa ${priceForm.origin} - ${priceForm.destination}`);
         alert("Tarifa actualizada.");
       } else {
         await supabase.from('route_prices').insert({ origin: priceForm.origin, destination: priceForm.destination, price_one_way: Number(priceForm.price_one_way), price_round_trip: Number(priceForm.price_round_trip) });
+        await logAction('NUEVO_PRECIO', `Creó tarifa ${priceForm.origin} - ${priceForm.destination}`);
         alert("Tarifa guardada.");
       }
       setPriceForm({...priceForm, price_one_way: '', price_round_trip: ''});
@@ -299,6 +448,7 @@ export default function AdminDashboard() {
         total_seats: Number(tripForm.total_seats), available_seats: Number(tripForm.total_seats), occupied_seats: [], bus_type: tripForm.bus_type, amenities: ["WiFi", "A/C", "WC"],
       });
       if (error) throw error;
+      await logAction('CREAR_VIAJE', `Programó viaje de ${tripForm.origin} a ${tripForm.destination} para el ${tripForm.date}`);
       alert("¡Viaje publicado!");
       setTripForm({ ...tripForm, date: "", departure_time: "", arrival_time: "", price_15_days: "" }); 
     } catch (error: any) { alert("Error: " + error.message); } finally { setIsCreatingTrip(false); }
@@ -312,6 +462,7 @@ export default function AdminDashboard() {
         sender_name: parcelForm.sender, receiver_name: parcelForm.receiver, origin: parcelForm.origin, destination: parcelForm.destination, price: Number(parcelForm.price), status: 'pending'
       });
       if (error) throw error;
+      await logAction('CREAR_PAQUETE', `Registró paquete de ${parcelForm.sender} a ${parcelForm.receiver}`);
       alert("Paquete registrado.");
       setParcelForm({ ...parcelForm, sender: '', receiver: '', price: '' });
       fetchRealData(); 
@@ -359,6 +510,21 @@ export default function AdminDashboard() {
   });
 
   const ingresosDelFiltro = filteredByDate.filter(item => item.status === 'pagado').reduce((acc, curr) => acc + curr.monto, 0);
+
+  // AGRUPACIÓN POR MES
+  const agruparPorMes = (datos: any[]) => {
+    return datos.reduce((acc, item) => {
+      const [year, month] = item.dateOnly.split('-');
+      const fecha = new Date(Number(year), Number(month) - 1);
+      const nombreMes = fecha.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' }).toUpperCase();
+      
+      if (!acc[nombreMes]) acc[nombreMes] = [];
+      acc[nombreMes].push(item);
+      return acc;
+    }, {} as Record<string, any[]>);
+  };
+
+  const datosAgrupados = agruparPorMes(finalFilteredData);
 
   const handleExportCSV = () => {
     const headers = "Folio,Estado,Concepto,Pasajero,Método de Pago,Fecha/Hora,Monto\n";
@@ -483,7 +649,9 @@ export default function AdminDashboard() {
             <p className="text-gray-500">Bonilla Tours - Administración Operativa</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-sm font-medium text-gray-600 bg-gray-200 px-3 py-1 rounded-full">Admin: {session.user.email}</div>
+            <div className="text-sm font-medium text-gray-600 bg-gray-200 px-3 py-1 rounded-full">
+              {userRole === 'admin' ? 'Admin: ' : 'Supervisor: '} {session.user.email}
+            </div>
             <button onClick={handleLogout} className="flex items-center gap-2 text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg font-bold transition-colors">
               <LogOut size={18} /> Salir
             </button>
@@ -497,6 +665,7 @@ export default function AdminDashboard() {
           <button onClick={() => setActiveTab('paqueteria')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'paqueteria' ? 'bg-orange-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Package size={18} /> Paquetería</button>
           <button onClick={() => setActiveTab('crear-viaje')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'crear-viaje' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><PlusCircle size={18} /> Programar Viaje</button>
           <button onClick={() => setActiveTab('tarifario')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'tarifario' ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Edit3 size={18} /> Tarifario</button>
+          <button onClick={() => setActiveTab('movimientos')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'movimientos' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><History size={18} /> Movimientos</button>
         </div>
 
         {/* --- VISTA: TAQUILLA --- */}
@@ -520,7 +689,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Fecha</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Fecha del Viaje</label>
                   <input type="date" required value={taquillaForm.date} onChange={e => setTaquillaForm({...taquillaForm, date: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
                 </div>
                 <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg text-sm transition-colors">Buscar Autobuses</button>
@@ -605,6 +774,18 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
+                  <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg">
+                    <label className="block text-xs font-bold text-orange-900 mb-1">Fecha de Registro de Venta</label>
+                    <input 
+                      type="date" 
+                      required 
+                      value={taquillaSaleDate} 
+                      onChange={e => setTaquillaSaleDate(e.target.value)} 
+                      className="w-full border rounded-lg p-2 text-sm text-orange-900 bg-white border-orange-300" 
+                    />
+                    <p className="text-[10px] text-orange-700 mt-1">Por defecto es hoy. Cambiar si se registran ventas de días pasados.</p>
+                  </div>
+
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mt-4 flex justify-between items-center">
                     <span className="font-bold text-emerald-800">Total a Cobrar:</span>
                     <span className="text-2xl font-black text-emerald-600">${(Number(taquillaPassenger.priceOverride) || 0) * taquillaSelectedSeats.length}</span>
@@ -619,10 +800,56 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* --- VISTA: HISTORIAL DE MOVIMIENTOS --- */}
+        {activeTab === 'movimientos' && (
+          <div className="bg-white rounded-xl border shadow-sm overflow-hidden max-w-6xl mx-auto">
+            <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
+              <h2 className="font-bold text-gray-800 flex items-center gap-2"><History className="text-indigo-600"/> Historial de Movimientos</h2>
+            </div>
+            <div className="overflow-x-auto max-h-[600px]">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-white text-gray-500 font-medium border-b sticky top-0">
+                  <tr>
+                    <th className="px-6 py-4">Fecha / Hora</th>
+                    <th className="px-6 py-4">Usuario Responsable</th>
+                    <th className="px-6 py-4">Tipo de Acción</th>
+                    <th className="px-6 py-4">Detalles</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y text-gray-800">
+                  {logs.length === 0 ? (
+                    <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No hay movimientos registrados.</td></tr>
+                  ) : (
+                    logs.map((log) => (
+                      <tr key={log.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-500">{new Date(log.created_at).toLocaleString()}</td>
+                        <td className="px-6 py-4 font-bold">{log.user_email}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${log.action.includes('BORRAR') ? 'bg-red-100 text-red-700' : log.action.includes('EDITAR') ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">{log.description}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* --- VISTA: TARIFARIO --- */}
         {activeTab === 'tarifario' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white rounded-xl border shadow-sm p-6 col-span-1 h-fit">
+            <div className="bg-white rounded-xl border shadow-sm p-6 col-span-1 h-fit relative">
+              {userRole !== 'admin' && (
+                <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-xl border p-4 text-center">
+                  <Lock className="text-gray-400 mb-2" size={32}/>
+                  <p className="font-bold text-gray-800">Acceso Restringido</p>
+                  <p className="text-xs text-gray-500">Solo administradores pueden cambiar tarifas globales.</p>
+                </div>
+              )}
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><Edit3 className="text-purple-600" /> Configurar Ruta</h2>
               <form onSubmit={handleSavePrice} className="space-y-4">
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Origen</label><select value={priceForm.origin} onChange={e => setPriceForm({...priceForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
@@ -730,13 +957,18 @@ export default function AdminDashboard() {
         {/* --- VISTA: TABLAS DE BOLETOS VENDIDOS / PENDIENTES --- */}
         {(activeTab === 'pagados' || activeTab === 'intentos') && (
           <>
-            <div className="bg-white p-4 rounded-xl border shadow-sm mb-6 flex items-center justify-between">
-              <div className="flex gap-4">
+            <div className="bg-white p-4 rounded-xl border shadow-sm mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex gap-4 items-center">
                 <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="border rounded-lg px-3 py-2 text-sm text-gray-700" />
                 <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="border rounded-lg px-3 py-2 text-sm text-gray-700" />
                 <button onClick={() => { setStartDate(''); setEndDate(''); }} className="text-sm text-blue-600 font-bold underline">Ver Todo</button>
               </div>
-              <button onClick={handleExportCSV} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">Exportar a Excel</button>
+              <div className="flex gap-2">
+                <button onClick={() => setShowHistoryModal(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
+                  <PlusCircle size={18} /> Registrar Venta Pasada
+                </button>
+                <button onClick={handleExportCSV} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">Exportar a Excel</button>
+              </div>
             </div>
 
             {/* Tarjetas de Resumen Dinámico */}
@@ -762,41 +994,52 @@ export default function AdminDashboard() {
               <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center"><h2 className="font-bold text-gray-800">{activeTab === 'pagados' ? 'Transacciones Completadas' : 'Operaciones Pendientes/Canceladas'}</h2></div>
               <div className="overflow-x-auto max-h-[600px]">
                 <table className="w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-white text-gray-500 font-medium border-b sticky top-0">
+                  <thead className="bg-white text-gray-500 font-medium border-b sticky top-0 z-10">
                     <tr><th className="px-6 py-4">Ref/Folio</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4">Concepto</th><th className="px-6 py-4">Pasajero</th><th className="px-6 py-4">Método</th><th className="px-6 py-4">Fecha/Hora</th><th className="px-6 py-4 text-right">Monto</th><th className="px-6 py-4 text-center">Acciones</th></tr>
                   </thead>
                   <tbody className="divide-y text-gray-800">
-                    {finalFilteredData.length === 0 ? (
+                    {Object.keys(datosAgrupados).length === 0 ? (
                       <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500">No hay registros con estos filtros.</td></tr>
                     ) : (
-                      finalFilteredData.map((item) => (
-                        <tr key={item.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 font-mono font-bold text-blue-900">{item.folio}</td>
-                          <td className="px-6 py-4">
-                            {item.status === 'pagado' ? <span className="flex items-center gap-1 text-green-700 bg-green-100 px-2 py-1 rounded-full text-xs font-bold w-fit"><CheckCircle size={12}/> Pagado</span> :
-                             item.status === 'pendiente' ? <span className="flex items-center gap-1 text-yellow-700 bg-yellow-100 px-2 py-1 rounded-full text-xs font-bold w-fit"><Clock size={12}/> Pendiente</span> :
-                             <span className="flex items-center gap-1 text-red-700 bg-red-100 px-2 py-1 rounded-full text-xs font-bold w-fit"><XCircle size={12}/> Cancelado</span>}
-                          </td>
-                          <td className="px-6 py-4"><span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-md text-xs font-semibold">{item.tipo}</span></td>
-                          <td className="px-6 py-4 font-medium max-w-[150px] truncate" title={item.cliente}>{item.cliente}</td>
-                          <td className="px-6 py-4 font-medium">{item.metodoPago}</td>
-                          <td className="px-6 py-4 text-gray-500">{item.fechaCompleta}</td>
-                          <td className="px-6 py-4 text-right font-bold text-gray-900">${Number(item.monto).toLocaleString()}</td>
-                          
-                          <td className="px-6 py-4 text-center flex justify-center gap-2">
-                            {item.status === 'pendiente' && (
-                              <button onClick={() => handleMarkAsPaid(item.id, item.folio)} className="p-2 text-green-600 hover:bg-green-100 rounded-lg cursor-pointer transition-colors" title="Confirmar Pago en Efectivo">
-                                <CheckSquare size={18} />
-                              </button>
-                            )}
-                            <button onClick={() => printTicket(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-blue-600 hover:bg-blue-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title={item.status === 'pagado' ? 'Imprimir Recibo Corto (Ticket)' : 'Solo pagados'}>
-                              <Printer size={18} />
-                            </button>
-                            <button onClick={() => printBoleto(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-purple-600 hover:bg-purple-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title={item.status === 'pagado' ? 'Imprimir Boleto Abordaje (PDF)' : 'Solo pagados'}>
-                              <Ticket size={18} />
-                            </button>
-                          </td>
-                        </tr>
+                      Object.keys(datosAgrupados).map((mes) => (
+                        <React.Fragment key={mes}>
+                          {/* Fila separadora del mes */}
+                          <tr className="bg-gray-100">
+                            <td colSpan={8} className="px-6 py-2 font-black text-gray-700 uppercase tracking-wider text-xs">
+                              {mes} - ({datosAgrupados[mes].length} Registros)
+                            </td>
+                          </tr>
+                          {/* Filas de datos del mes */}
+                          {datosAgrupados[mes].map((item) => (
+                            <tr key={item.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 font-mono font-bold text-blue-900">{item.folio}</td>
+                              <td className="px-6 py-4">
+                                {item.status === 'pagado' ? <span className="flex items-center gap-1 text-green-700 bg-green-100 px-2 py-1 rounded-full text-xs font-bold w-fit"><CheckCircle size={12}/> Pagado</span> :
+                                item.status === 'pendiente' ? <span className="flex items-center gap-1 text-yellow-700 bg-yellow-100 px-2 py-1 rounded-full text-xs font-bold w-fit"><Clock size={12}/> Pendiente</span> :
+                                <span className="flex items-center gap-1 text-red-700 bg-red-100 px-2 py-1 rounded-full text-xs font-bold w-fit"><XCircle size={12}/> Cancelado</span>}
+                              </td>
+                              <td className="px-6 py-4"><span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-md text-xs font-semibold">{item.tipo}</span></td>
+                              <td className="px-6 py-4 font-medium max-w-[150px] truncate" title={item.cliente}>{item.cliente}</td>
+                              <td className="px-6 py-4 font-medium">{item.metodoPago}</td>
+                              <td className="px-6 py-4 text-gray-500">{item.fechaCompleta}</td>
+                              <td className="px-6 py-4 text-right font-bold text-gray-900">${Number(item.monto).toLocaleString()}</td>
+                              
+                              <td className="px-6 py-4 text-center flex justify-center gap-2">
+                                {item.status === 'pendiente' && (
+                                  <button onClick={() => handleMarkAsPaid(item.id, item.folio)} className="p-2 text-green-600 hover:bg-green-100 rounded-lg cursor-pointer transition-colors" title="Confirmar Pago en Efectivo">
+                                    <CheckSquare size={18} />
+                                  </button>
+                                )}
+                                <button onClick={() => printTicket(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-blue-600 hover:bg-blue-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title={item.status === 'pagado' ? 'Imprimir Recibo Corto (Ticket)' : 'Solo pagados'}>
+                                  <Printer size={18} />
+                                </button>
+                                <button onClick={() => printBoleto(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-purple-600 hover:bg-purple-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title={item.status === 'pagado' ? 'Imprimir Boleto Abordaje (PDF)' : 'Solo pagados'}>
+                                  <Ticket size={18} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
                       ))
                     )}
                   </tbody>
@@ -805,6 +1048,84 @@ export default function AdminDashboard() {
             </div>
           </>
         )}
+
+        {/* --- MODAL DE REGISTRO HISTÓRICO --- */}
+        {showHistoryModal && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
+              <div className="bg-indigo-900 px-6 py-4 flex justify-between items-center text-white">
+                <h3 className="font-bold text-lg flex items-center gap-2"><History /> Subir Boleto de Sistema Anterior</h3>
+                <button onClick={() => setShowHistoryModal(false)} className="text-indigo-200 hover:text-white"><XCircle /></button>
+              </div>
+              
+              <form onSubmit={handleSaveHistoricalBooking} className="p-6 space-y-4">
+                <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-lg text-xs text-indigo-800 mb-4">
+                  <strong>Nota:</strong> Si el viaje no existe en la base de datos para esta fecha, el sistema lo creará automáticamente en segundo plano para no generar errores.
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Fecha de la Venta</label>
+                    <input type="date" required value={historyForm.saleDate} onChange={e => setHistoryForm({...historyForm, saleDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Fecha del Viaje</label>
+                    <input type="date" required value={historyForm.tripDate} onChange={e => setHistoryForm({...historyForm, tripDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Origen</label>
+                    <select value={historyForm.origin} onChange={e => setHistoryForm({...historyForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm">
+                      {BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Destino</label>
+                    <select value={historyForm.destination} onChange={e => setHistoryForm({...historyForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm">
+                      {BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Nombre del Pasajero</label>
+                    <input type="text" required value={historyForm.name} onChange={e => setHistoryForm({...historyForm, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm" placeholder="Ej. María López" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Tipo de Boleto</label>
+                    <select value={historyForm.tripType} onChange={e => setHistoryForm({...historyForm, tripType: e.target.value})} className="w-full border rounded-lg p-2 text-sm">
+                      <option value="sencillo">Sencillo</option>
+                      <option value="redondo">Redondo</option>
+                      <option value="15_dias">15 Días</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Total Pagado ($)</label>
+                    <input type="number" required value={historyForm.price} onChange={e => setHistoryForm({...historyForm, price: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-bold text-green-700" placeholder="Ej. 850" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Asientos (Opcional)</label>
+                    <input type="text" value={historyForm.seats} onChange={e => setHistoryForm({...historyForm, seats: e.target.value})} className="w-full border rounded-lg p-2 text-sm" placeholder="Ej. 12, 13 (Separados por coma)" />
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-3 border-t mt-6">
+                  <button type="button" onClick={() => setShowHistoryModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
+                  <button type="submit" disabled={isSavingHistory} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-colors">
+                    {isSavingHistory ? 'Guardando...' : 'Guardar Boleto Histórico'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

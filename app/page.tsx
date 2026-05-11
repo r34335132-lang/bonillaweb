@@ -293,7 +293,7 @@ export default function AdminDashboard() {
       const dIdx = BONILLA_ROUTE.indexOf(taquillaForm.destination);
       if (oIdx === -1 || dIdx === -1 || oIdx === dIdx) return alert("Ruta inválida");
 
-      const valid = data.filter(t => {
+      const valid = data.filter((t: any) => {
         const tStart = BONILLA_ROUTE.indexOf(t.origin);
         const tEnd = BONILLA_ROUTE.indexOf(t.destination);
         if (oIdx < dIdx) return tStart < tEnd && tStart <= oIdx && tEnd >= dIdx;
@@ -498,22 +498,22 @@ export default function AdminDashboard() {
     );
   }
 
-  const filteredByDate = data.filter((item) => {
+  const filteredByDate = data.filter((item: any) => {
     if (!startDate || !endDate) return true; 
     return item.dateOnly >= startDate && item.dateOnly <= endDate;
   });
 
-  const finalFilteredData = filteredByDate.filter((item) => {
+  const finalFilteredData = filteredByDate.filter((item: any) => {
     if (activeTab === 'pagados') return item.status === 'pagado';
     if (activeTab === 'intentos') return item.status === 'pendiente' || item.status === 'cancelado';
     return true;
   });
 
-  const ingresosDelFiltro = filteredByDate.filter(item => item.status === 'pagado').reduce((acc, curr) => acc + curr.monto, 0);
+  const ingresosDelFiltro = filteredByDate.filter((item: any) => item.status === 'pagado').reduce((acc: any, curr: any) => acc + curr.monto, 0);
 
   // AGRUPACIÓN POR MES
   const agruparPorMes = (datos: any[]) => {
-    return datos.reduce((acc, item) => {
+    return datos.reduce((acc: any, item: any) => {
       const [year, month] = item.dateOnly.split('-');
       const fecha = new Date(Number(year), Number(month) - 1);
       const nombreMes = fecha.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' }).toUpperCase();
@@ -528,7 +528,7 @@ export default function AdminDashboard() {
 
   const handleExportCSV = () => {
     const headers = "Folio,Estado,Concepto,Pasajero,Método de Pago,Fecha/Hora,Monto\n";
-    const rows = finalFilteredData.map(item => `${item.folio},${item.status},${item.tipo},"${item.cliente}",${item.metodoPago},"${item.fechaCompleta}",${item.monto}`).join("\n");
+    const rows = finalFilteredData.map((item: any) => `${item.folio},${item.status},${item.tipo},"${item.cliente}",${item.metodoPago},"${item.fechaCompleta}",${item.monto}`).join("\n");
     const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(headers + rows);
     
     const link = document.createElement("a");
@@ -650,7 +650,7 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-4">
             <div className="text-sm font-medium text-gray-600 bg-gray-200 px-3 py-1 rounded-full">
-              {userRole === 'admin' ? 'Admin: ' : 'Supervisor: '} {session.user.email}
+              {userRole === 'admin' ? 'Admin: ' : 'Supervisor: '} {session?.user?.email}
             </div>
             <button onClick={handleLogout} className="flex items-center gap-2 text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg font-bold transition-colors">
               <LogOut size={18} /> Salir
@@ -698,7 +698,7 @@ export default function AdminDashboard() {
               {taquillaTrips.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="font-bold text-gray-700 border-b pb-2">Resultados ({taquillaTrips.length})</h3>
-                  {taquillaTrips.map(trip => (
+                  {taquillaTrips.map((trip: any) => (
                     <div key={trip.id} className={`p-4 border rounded-xl cursor-pointer transition-colors ${taquillaSelectedTrip?.id === trip.id ? 'border-emerald-500 bg-emerald-50' : 'hover:bg-gray-50'}`} onClick={() => handleSelectTaquillaTrip(trip)}>
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-gray-800">{trip.departure_time}</span>
@@ -820,7 +820,7 @@ export default function AdminDashboard() {
                   {logs.length === 0 ? (
                     <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No hay movimientos registrados.</td></tr>
                   ) : (
-                    logs.map((log) => (
+                    logs.map((log: any) => (
                       <tr key={log.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-gray-500">{new Date(log.created_at).toLocaleString()}</td>
                         <td className="px-6 py-4 font-bold">{log.user_email}</td>
@@ -865,7 +865,7 @@ export default function AdminDashboard() {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-white text-gray-500 font-medium border-b sticky top-0"><tr><th className="px-4 py-3">Ruta Principal</th><th className="px-4 py-3 text-right">Ida</th><th className="px-4 py-3 text-right">Ida y Vuelta</th></tr></thead>
                   <tbody className="divide-y text-gray-800">
-                    {defaultPrices.map(p => (
+                    {defaultPrices.map((p: any) => (
                       <tr key={p.id} className="hover:bg-purple-50 transition-colors"><td className="px-4 py-3 font-medium text-gray-900">{p.origin} ↔ {p.destination}</td><td className="px-4 py-3 text-right text-gray-600">${Number(p.price_one_way).toLocaleString()}</td><td className="px-4 py-3 text-right font-bold text-purple-700">${Number(p.price_round_trip).toLocaleString()}</td></tr>
                     ))}
                   </tbody>
@@ -902,7 +902,7 @@ export default function AdminDashboard() {
               <div className="border rounded-xl overflow-hidden">
                 <div className="bg-blue-900 px-4 py-3 text-white font-bold flex justify-between items-center"><span>Precios Dinámicos: {tripForm.origin} ➔ {tripForm.destination}</span><span className="text-xs font-normal bg-blue-800 px-3 py-1 rounded border border-blue-700">Llenado Automático</span></div>
                 <div className="p-4 space-y-3 bg-white">
-                  {BONILLA_ROUTE.slice(BONILLA_ROUTE.indexOf(tripForm.origin) + 1).map(dest => (
+                  {BONILLA_ROUTE.slice(BONILLA_ROUTE.indexOf(tripForm.origin) + 1).map((dest: string) => (
                     <div key={dest} className="flex items-center justify-between border-b pb-3">
                       <span className="font-bold text-gray-700 w-1/3">A: {dest}</span>
                       <div className="flex gap-4 w-2/3">
@@ -944,7 +944,7 @@ export default function AdminDashboard() {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-white text-gray-500 font-medium border-b sticky top-0"><tr><th className="px-4 py-3">Folio</th><th className="px-4 py-3">Ruta</th><th className="px-4 py-3">Pasajero</th><th className="px-4 py-3 text-right">Cobro</th></tr></thead>
                   <tbody className="divide-y text-gray-800">
-                    {parcels.map(p => (
+                    {parcels.map((p: any) => (
                       <tr key={p.id} className="hover:bg-gray-50"><td className="px-4 py-3 font-mono font-bold text-orange-700">PAQ-{p.folio}</td><td className="px-4 py-3 text-xs font-medium">{p.origin} a {p.destination}</td><td className="px-4 py-3 truncate">{p.sender_name}</td><td className="px-4 py-3 text-right font-bold">${Number(p.price).toFixed(2)}</td></tr>
                     ))}
                   </tbody>
@@ -1001,7 +1001,7 @@ export default function AdminDashboard() {
                     {Object.keys(datosAgrupados).length === 0 ? (
                       <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500">No hay registros con estos filtros.</td></tr>
                     ) : (
-                      Object.keys(datosAgrupados).map((mes) => (
+                      Object.keys(datosAgrupados).map((mes: string) => (
                         <React.Fragment key={mes}>
                           {/* Fila separadora del mes */}
                           <tr className="bg-gray-100">
@@ -1010,7 +1010,7 @@ export default function AdminDashboard() {
                             </td>
                           </tr>
                           {/* Filas de datos del mes */}
-                          {datosAgrupados[mes].map((item) => (
+                          {datosAgrupados[mes].map((item: any) => (
                             <tr key={item.id} className="hover:bg-gray-50">
                               <td className="px-6 py-4 font-mono font-bold text-blue-900">{item.folio}</td>
                               <td className="px-6 py-4">

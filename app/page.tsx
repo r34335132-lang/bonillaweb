@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase'; 
-import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare, History } from 'lucide-react';
+import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare, History, Trash2 } from 'lucide-react';
 
 type TabType = 'pagados' | 'intentos' | 'taquilla' | 'crear-viaje' | 'paqueteria' | 'tarifario' | 'movimientos';
 
@@ -205,6 +205,23 @@ export default function AdminDashboard() {
       fetchRealData();
     } catch (error: any) {
       alert("Error al actualizar: " + error.message);
+    }
+  };
+
+  // NUEVA LÓGICA PARA BORRAR VENTAS
+  const handleDeleteBooking = async (bookingId: string, folio: string) => {
+    if (userRole !== 'admin') return alert("Solo los administradores pueden borrar ventas.");
+    if (!window.confirm(`¿Estás seguro de que deseas ELIMINAR permanentemente la venta con folio ${folio}? Esta acción no se puede deshacer.`)) return;
+    
+    try {
+      const { error } = await supabase.from('bookings').delete().eq('id', bookingId);
+      if (error) throw error;
+      
+      await logAction('BORRAR_VENTA', `Eliminó la venta con folio ${folio} del sistema.`);
+      alert(`Venta ${folio} eliminada correctamente.`);
+      fetchRealData(); // Refrescar la tabla después de borrar
+    } catch (error: any) {
+      alert("Error al eliminar la venta: " + error.message);
     }
   };
 
@@ -673,78 +690,147 @@ export default function AdminDashboard() {
 
   const printBoleto = (item: any) => {
     if (item.status !== 'pagado') { alert("Solo se pueden generar boletos de compras pagadas."); return; }
-    const printWindow = window.open('', '', 'width=800,height=1000');
+    const printWindow = window.open('', '', 'width=300,height=600');
     if (!printWindow) return;
-    const html = `<html><head><title>Boleto ${item.folio}</title><style>
-        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: auto; }
-        .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 20px; }
-        .header img { max-width: 280px; margin-bottom: 10px; }
-        .header h2 { margin: 5px 0 0 0; color: #555; font-size: 18px; letter-spacing: 2px; }
-        .content { display: flex; justify-content: space-between; }
-        .info { width: 65%; }
-        .qr-section { width: 30%; text-align: center; }
-        .qr-section img { width: 150px; height: 150px; margin-bottom: 10px; }
-        .row { margin-bottom: 15px; }
-        .label { font-size: 12px; color: #777; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 2px; }
-        .value { font-size: 18px; font-weight: bold; color: #000; }
-        .highlight { background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #b91c1c; }
-        .terms { margin-top: 40px; font-size: 11px; color: #555; border-top: 1px solid #ccc; padding-top: 20px; text-align: justify; line-height: 1.5; }
-        .terms h4 { margin-top: 0; color: #000; font-size: 14px; }
-      </style></head><body>
-        <div class="header">
-          <img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" alt="Bonilla Tours" />
-          <h2>BOLETO REGULAR</h2>
-        </div>
-        <div class="content">
-          <div class="info">
-            <div class="row">
-              <span class="label">Pasajero/a</span>
-              <span class="value">${item.cliente}</span>
-            </div>
-            <div class="row highlight">
-              <span class="label">Hasta</span>
-              <span class="value" style="font-size: 24px;">${item.destino}</span>
-            </div>
-            <div class="row">
-              <span class="label">Fecha y hora de viaje</span>
-              <span class="value">${item.fechaViaje} - ${item.horaViaje}</span>
-            </div>
-            <div class="row">
-              <span class="label">Viaje</span>
-              <span class="value">Destino: ${item.destino} | ${item.tipo}</span>
-            </div>
-            <div class="row" style="display: flex; gap: 40px;">
-              <div>
-                <span class="label">Asiento(s)</span>
-                <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span>
-              </div>
-              <div>
-                <span class="label">Total Pagado</span>
-                <span class="value">$ ${Number(item.monto).toFixed(2)} MXN</span>
-              </div>
-            </div>
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Boleto ${item.folio}</title>
+        <style>
+          @page { size: 58mm auto; margin: 0mm; }
+          html, body { 
+            width: 58mm !important; 
+            margin: 0 !important; 
+            padding: 0 !important; 
+            background-color: #fff; 
+            color: #000; 
+            font-family: 'Courier New', Courier, monospace; 
+          }
+          .boleto { 
+            width: 58mm; 
+            padding: 2mm 3mm; 
+            box-sizing: border-box; 
+            font-size: 11px; 
+            line-height: 1.2; 
+          }
+          .text-center { text-align: center; }
+          .text-bold { font-weight: bold; }
+          
+          .logo { 
+            max-width: 45mm; 
+            margin-bottom: 5px; 
+          }
+          
+          .qr-code { 
+            width: 35mm; 
+            height: 35mm; 
+            margin: 10px auto; 
+            display: block; 
+          }
+          
+          .divider { 
+            border-bottom: 1px dashed #000; 
+            margin: 8px 0; 
+          }
+          
+          .row { 
+            margin-bottom: 4px; 
+            display: flex; 
+            justify-content: space-between; 
+          }
+          
+          .label { 
+            font-weight: bold; 
+            margin-right: 4px; 
+            font-size: 10px; 
+          }
+          
+          .value { 
+            text-align: right; 
+            font-size: 10px; 
+            word-break: break-word; 
+            max-width: 65%; 
+          }
+          
+          .value-large { 
+            font-size: 14px; 
+            font-weight: bold; 
+            text-align: center; 
+            display: block; 
+            margin: 5px 0; 
+          }
+          
+          .terms { 
+            font-size: 8px; 
+            text-align: justify; 
+            margin-top: 10px; 
+            line-height: 1.1; 
+          }
+          
+          .terms h4 { 
+            font-size: 9px; 
+            text-align: center; 
+            margin: 5px 0; 
+            border-bottom: 1px solid #000; 
+            padding-bottom: 2px; 
+          }
+          
+          .terms p { margin: 2px 0 4px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="boleto">
+          <div class="text-center">
+            <img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" />
+            <div class="text-bold" style="font-size: 14px;">BOLETO DE VIAJE</div>
           </div>
-          <div class="qr-section">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${item.folio}" alt="QR Code" />
+          
+          <div class="divider"></div>
+          
+          <div class="row"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div>
+          
+          <div class="text-center" style="margin: 8px 0;">
+            <div class="label" style="text-align:center; margin:0;">DESTINO</div>
+            <div class="value-large">${item.destino}</div>
+          </div>
+          
+          <div class="row"><span class="label">Fecha:</span> <span class="value">${item.fechaViaje}</span></div>
+          <div class="row"><span class="label">Hora:</span> <span class="value">${item.horaViaje}</span></div>
+          <div class="row"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div>
+          <div class="row"><span class="label">Asientos:</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Al abordar'}</span></div>
+          <div class="row"><span class="label">Total:</span> <span class="value">$${Number(item.monto).toFixed(2)} MXN</span></div>
+          
+          <div class="divider"></div>
+          
+          <div class="text-center">
+            <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${item.folio}" alt="QR" />
             <div class="label">Folio de Reserva</div>
-            <div class="value" style="font-size: 16px;">${item.folio}</div>
-            <div style="margin-top: 20px; font-size: 12px; color: #666;">
-              <strong>Emitido:</strong><br/>${item.fechaCompleta}
-            </div>
+            <div class="text-bold" style="font-size: 12px;">${item.folio}</div>
+            <div style="font-size: 9px; margin-top: 4px;">Emitido: ${item.fechaCompleta}</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="terms">
+            <h4>TÉRMINOS Y CONDICIONES</h4>
+            <p>- Preséntese 20 min antes de su viaje.</p>
+            <p>- Muestre el QR o este ticket impreso para abordar.</p>
+            <p>- Tolerancia máx de 5 min en espera.</p>
+            <p>- Puntos de ascenso/descenso sujetos a cambios.</p>
+            <p>- Cancelaciones: 10% de cargo, mín. 1 hr en oficina.</p>
           </div>
         </div>
-        <div class="terms">
-          <h4>TÉRMINOS Y CONDICIONES</h4>
-          <p>Deberá presentarse por lo menos 20 minutos antes del horario seleccionado en el punto de encuentro establecido en su reservación o itinerario.</p>
-          <p>Para abordar, deberá presentar el código QR de su reservación o el folio impreso en este boleto.</p>
-          <p>Para garantizar que los usuarios lleguen a tiempo a su destino, únicamente otorgamos 5 minutos de tolerancia en espera. Una vez transcurrido ese tiempo, el conductor dará comienzo al viaje. Situaciones excepcionales se valorarán y gestionarán de mutuo acuerdo entre empresa y usuarios.</p>
-          <p>Cabe tener en cuenta que algún punto de encuentro o descenso puede cambiar a causa de situaciones ajenas a la empresa, tales como obras, bloqueos, accidentes etc. En tal caso, se les informará a los usuarios con antelación si ello fuera posible. De otro modo, se acordará con los usuarios una opción conveniente.</p>
-          <h4 style="margin-top: 15px;">Cancelaciones</h4>
-          <p>Las cancelaciones tienen un costo del 10% (trámite exclusivo en oficina) y aplican siempre y cuando se soliciten con al menos 1 hora de anticipación a la salida.</p>
-        </div>
-        <script>window.onload = function() { window.print(); window.close(); }</script>
-      </body></html>`;
-    printWindow.document.write(html); printWindow.document.close();
+        <script>
+          window.onload = function() { 
+            window.print(); 
+            setTimeout(function(){ window.close(); }, 500);
+          }
+        </script>
+      </body>
+      </html>`;
+    printWindow.document.write(html); 
+    printWindow.document.close();
   };
 
   return (
@@ -1143,6 +1229,11 @@ export default function AdminDashboard() {
                                 <button onClick={() => printBoleto(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-purple-600 hover:bg-purple-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title={item.status === 'pagado' ? 'Imprimir Boleto Abordaje (PDF)' : 'Solo pagados'}>
                                   <Ticket size={18} />
                                 </button>
+                                {userRole === 'admin' && (
+                                  <button onClick={() => handleDeleteBooking(item.id, item.folio)} className="p-2 text-red-600 hover:bg-red-100 rounded-lg cursor-pointer transition-colors" title="Eliminar Venta Permanentemente">
+                                    <Trash2 size={18} />
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           ))}

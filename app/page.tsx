@@ -208,7 +208,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // NUEVA LÓGICA PARA BORRAR VENTAS
   const handleDeleteBooking = async (bookingId: string, folio: string) => {
     if (userRole !== 'admin') return alert("Solo los administradores pueden borrar ventas.");
     if (!window.confirm(`¿Estás seguro de que deseas ELIMINAR permanentemente la venta con folio ${folio}? Esta acción no se puede deshacer.`)) return;
@@ -219,7 +218,7 @@ export default function AdminDashboard() {
       
       await logAction('BORRAR_VENTA', `Eliminó la venta con folio ${folio} del sistema.`);
       alert(`Venta ${folio} eliminada correctamente.`);
-      fetchRealData(); // Refrescar la tabla después de borrar
+      fetchRealData(); 
     } catch (error: any) {
       alert("Error al eliminar la venta: " + error.message);
     }
@@ -231,7 +230,6 @@ export default function AdminDashboard() {
     setIsSavingHistory(true);
 
     try {
-      // 1. Buscar si ya existe un viaje para esa fecha y ruta
       let currentTripId = null;
       const { data: existingTrips } = await supabase
         .from('trips')
@@ -244,12 +242,11 @@ export default function AdminDashboard() {
       if (existingTrips && existingTrips.length > 0) {
         currentTripId = existingTrips[0].id;
       } else {
-        // 2. Si no existe, CREAMOS el viaje histórico automáticamente
         const { data: newTrip, error: tripError } = await supabase.from('trips').insert({
           origin: historyForm.origin,
           destination: historyForm.destination,
           date: historyForm.tripDate,
-          departure_time: '12:00', // Horario genérico para históricos
+          departure_time: '12:00',
           arrival_time: '18:00',
           duration: 'Histórico',
           price: Number(historyForm.price) || 0,
@@ -264,12 +261,10 @@ export default function AdminDashboard() {
         currentTripId = newTrip.id;
       }
 
-      // 3. Procesar asientos (si dejaron vacío, ponemos el asiento [0] simbólico)
       const seatsArray = historyForm.seats.trim() !== '' 
         ? historyForm.seats.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
         : [0];
 
-      // 4. Crear el Boleto (Booking)
       const bookingRef = "OLD-" + Math.floor(100000 + Math.random() * 900000).toString().slice(0, 6);
       
       const { error: bookingError } = await supabase.from('bookings').insert({
@@ -279,7 +274,7 @@ export default function AdminDashboard() {
         passenger_email: 'historico@bonillatours.com',
         passenger_phone: '0000000000',
         payment_method: 'cash',
-        status: 'confirmed', // Siempre confirmado porque ya pasó
+        status: 'confirmed',
         is_guest: true,
         total_price: Number(historyForm.price) || 0,
         origin: historyForm.origin,
@@ -297,7 +292,7 @@ export default function AdminDashboard() {
       
       setShowHistoryModal(false);
       setHistoryForm({ ...historyForm, name: '', price: '', seats: '' });
-      fetchRealData(); // Refrescar tabla
+      fetchRealData(); 
 
     } catch (error: any) {
       alert(error.message);
@@ -401,7 +396,7 @@ export default function AdminDashboard() {
         seats: taquillaSelectedSeats,
         is_round_trip: taquillaPassenger.tripType === 'redondo',
         is_15_days: taquillaPassenger.tripType === '15_dias',
-        created_at: new Date(`${taquillaSaleDate}T12:00:00Z`).toISOString() // Fecha manual
+        created_at: new Date(`${taquillaSaleDate}T12:00:00Z`).toISOString()
       });
 
       if (error) throw error;
@@ -561,10 +556,9 @@ export default function AdminDashboard() {
     document.body.removeChild(link);
   };
 
-  // NUEVA FUNCIÓN OPTIMIZADA PARA IMPRESORA TÉRMICA 58MM (ANTI-ERRORES)
+  // RECIBO CORTO: OPTIMIZADO PARA NO EMPALMAR TEXTOS EN 58MM
   const printTicket = (item: any) => {
     if (item.status !== 'pagado') { alert("Solo se pueden generar tickets de compras pagadas."); return; }
-    // Abrimos una ventana muy delgadita
     const printWindow = window.open('', '', 'width=300,height=600');
     if (!printWindow) return;
     
@@ -574,81 +568,31 @@ export default function AdminDashboard() {
       <head>
         <title>Ticket ${item.folio}</title>
         <style>
-          /* 1. ESTO ES LA MAGIA: Fuerza al navegador a usar tamaño ticket y quitar márgenes */
-          @page { 
-            size: 58mm auto; 
-            margin: 0mm; 
-          }
-          
-          /* 2. Forzamos el body para que no se estire nunca más allá de los 58mm */
-          html, body { 
+          @page { size: 58mm auto; margin: 0mm; }
+          body { 
             width: 58mm !important;
+            max-width: 58mm !important;
             margin: 0 !important; 
             padding: 0 !important; 
             background-color: #fff;
             color: #000;
             font-family: 'Courier New', Courier, monospace; 
           }
-          
-          /* 3. Contenedor del ticket con área segura para que no corte letras */
           .ticket {
             width: 58mm;
-            padding: 2mm 3mm; /* Margen interno pequeño */
+            padding: 2mm 3mm; 
             box-sizing: border-box;
             font-size: 11px; 
             line-height: 1.2;
           }
-
-          .header { 
-            text-align: center; 
-            margin-bottom: 6px; 
-            border-bottom: 1px dashed #000; 
-            padding-bottom: 6px; 
-          }
-          
-          .header h2 { 
-            margin: 0; 
-            font-size: 14px; 
-            font-weight: bold;
-          }
-          
-          .header p {
-            margin: 2px 0 0 0;
-            font-size: 9px;
-          }
-
-          .row { 
-            display: flex; 
-            justify-content: space-between; 
-            margin-bottom: 4px;
-          }
-
-          .row span.label {
-            font-weight: bold;
-            margin-right: 4px;
-            white-space: nowrap; 
-          }
-
-          .row span.value {
-            text-align: right;
-            word-break: break-word; 
-            max-width: 65%;
-          }
-
-          .total { 
-            font-size: 13px; 
-            font-weight: bold; 
-            border-top: 1px dashed #000; 
-            padding-top: 6px; 
-            margin-top: 6px; 
-          }
-
-          .footer { 
-            text-align: center; 
-            margin-top: 15px; 
-            font-size: 10px; 
-            padding-bottom: 15px;
-          }
+          .header { text-align: center; margin-bottom: 6px; border-bottom: 1px dashed #000; padding-bottom: 6px; }
+          .header h2 { margin: 0; font-size: 14px; font-weight: bold; }
+          .header p { margin: 2px 0 0 0; font-size: 9px; }
+          .item { margin-bottom: 4px; }
+          .label { font-weight: bold; font-size: 10px; display: block; }
+          .value { display: block; font-size: 11px; margin-left: 4px; word-break: break-word; }
+          .total { font-size: 13px; font-weight: bold; border-top: 1px dashed #000; padding-top: 6px; margin-top: 6px; text-align: right; }
+          .footer { text-align: center; margin-top: 15px; font-size: 9px; padding-bottom: 15px; }
         </style>
       </head>
       <body>
@@ -658,21 +602,21 @@ export default function AdminDashboard() {
             <p>Comprobante de Pago</p>
           </div>
           
-          <div class="row"><span class="label">Folio:</span> <span class="value">${item.folio}</span></div>
-          <div class="row"><span class="label">Fecha:</span> <span class="value">${item.fechaCompleta}</span></div>
+          <div class="item"><span class="label">Folio:</span> <span class="value">${item.folio}</span></div>
+          <div class="item"><span class="label">Fecha:</span> <span class="value">${item.fechaCompleta}</span></div>
           
           <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
           
-          <div class="row"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div>
-          <div class="row"><span class="label">Destino:</span> <span class="value">${item.destino}</span></div>
-          <div class="row"><span class="label">Concepto:</span> <span class="value">${item.tipo}</span></div>
-          <div class="row"><span class="label">Método:</span> <span class="value">${item.metodoPago}</span></div>
+          <div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div>
+          <div class="item"><span class="label">Destino:</span> <span class="value">${item.destino}</span></div>
+          <div class="item"><span class="label">Concepto:</span> <span class="value">${item.tipo}</span></div>
+          <div class="item"><span class="label">Método:</span> <span class="value">${item.metodoPago}</span></div>
           
-          <div class="row total"><span class="label">TOTAL:</span> <span class="value">$${Number(item.monto).toFixed(2)}</span></div>
+          <div class="total">TOTAL: $${Number(item.monto).toFixed(2)}</div>
           
           <div class="footer">
             <p style="margin-bottom: 2px;">¡Gracias por su preferencia!</p>
-            <p style="font-size: 8px; margin-top:0;">Conserve este ticket</p>
+            <p style="margin-top:0;">Conserve este ticket</p>
           </div>
         </div>
         <script>
@@ -688,6 +632,7 @@ export default function AdminDashboard() {
     printWindow.document.close();
   };
 
+  // BOLETO DE ABORDAJE: APILADO VERTICAL PARA EVITAR EMPALMES EN 58MM
   const printBoleto = (item: any) => {
     if (item.status !== 'pagado') { alert("Solo se pueden generar boletos de compras pagadas."); return; }
     const printWindow = window.open('', '', 'width=300,height=600');
@@ -699,8 +644,9 @@ export default function AdminDashboard() {
         <title>Boleto ${item.folio}</title>
         <style>
           @page { size: 58mm auto; margin: 0mm; }
-          html, body { 
+          body { 
             width: 58mm !important; 
+            max-width: 58mm !important;
             margin: 0 !important; 
             padding: 0 !important; 
             background-color: #fff; 
@@ -709,105 +655,73 @@ export default function AdminDashboard() {
           }
           .boleto { 
             width: 58mm; 
-            padding: 2mm 3mm; 
+            padding: 2mm 2mm; 
             box-sizing: border-box; 
-            font-size: 11px; 
-            line-height: 1.2; 
           }
           .text-center { text-align: center; }
           .text-bold { font-weight: bold; }
+          .logo { max-width: 40mm; margin: 0 auto 5px; display: block; }
+          .divider { border-bottom: 1px dashed #000; margin: 6px 0; }
           
-          .logo { 
-            max-width: 45mm; 
-            margin-bottom: 5px; 
-          }
+          /* Estilo apilado: Etiqueta arriba, Valor abajo */
+          .item { margin-bottom: 4px; }
+          .label { font-size: 9px; font-weight: bold; display: block; }
+          .value { font-size: 11px; display: block; margin-left: 2px; word-break: break-word; }
           
-          .qr-code { 
-            width: 35mm; 
-            height: 35mm; 
-            margin: 10px auto; 
-            display: block; 
-          }
+          /* Recuadro especial para el destino */
+          .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; }
+          .dest-label { font-size: 9px; font-weight: bold; margin-bottom: 2px; }
+          .dest-value { font-size: 16px; font-weight: bold; text-transform: uppercase; }
           
-          .divider { 
-            border-bottom: 1px dashed #000; 
-            margin: 8px 0; 
-          }
+          .qr-container { text-align: center; margin: 8px 0; }
+          .qr-code { width: 35mm; height: 35mm; margin: 0 auto; display: block; }
           
-          .row { 
-            margin-bottom: 4px; 
-            display: flex; 
-            justify-content: space-between; 
-          }
-          
-          .label { 
-            font-weight: bold; 
-            margin-right: 4px; 
-            font-size: 10px; 
-          }
-          
-          .value { 
-            text-align: right; 
-            font-size: 10px; 
-            word-break: break-word; 
-            max-width: 65%; 
-          }
-          
-          .value-large { 
-            font-size: 14px; 
-            font-weight: bold; 
-            text-align: center; 
-            display: block; 
-            margin: 5px 0; 
-          }
-          
-          .terms { 
-            font-size: 8px; 
-            text-align: justify; 
-            margin-top: 10px; 
-            line-height: 1.1; 
-          }
-          
-          .terms h4 { 
-            font-size: 9px; 
-            text-align: center; 
-            margin: 5px 0; 
-            border-bottom: 1px solid #000; 
-            padding-bottom: 2px; 
-          }
-          
-          .terms p { margin: 2px 0 4px 0; }
+          .terms { font-size: 8px; text-align: left; margin-top: 8px; line-height: 1.1; }
+          .terms h4 { font-size: 9px; text-align: center; margin: 0 0 4px 0; border-bottom: 1px solid #000; padding-bottom: 2px; }
+          .terms p { margin: 2px 0; }
         </style>
       </head>
       <body>
         <div class="boleto">
-          <div class="text-center">
-            <img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" />
-            <div class="text-bold" style="font-size: 14px;">BOLETO DE VIAJE</div>
+          <img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" />
+          <div class="text-center text-bold" style="font-size: 12px;">BOLETO DE VIAJE</div>
+          
+          <div class="divider"></div>
+          
+          <div class="item">
+            <span class="label">Pasajero:</span> 
+            <span class="value">${item.cliente}</span>
+          </div>
+          
+          <div class="dest-box">
+            <div class="dest-label">DESTINO</div>
+            <div class="dest-value">${item.destino}</div>
+          </div>
+          
+          <div class="item">
+            <span class="label">Fecha y Hora:</span> 
+            <span class="value">${item.fechaViaje} - ${item.horaViaje}</span>
+          </div>
+          <div class="item">
+            <span class="label">Tipo:</span> 
+            <span class="value">${item.tipo}</span>
+          </div>
+          <div class="item">
+            <span class="label">Asiento(s):</span> 
+            <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span>
+          </div>
+          <div class="item">
+            <span class="label">Total Pagado:</span> 
+            <span class="value text-bold">$${Number(item.monto).toFixed(2)} MXN</span>
           </div>
           
           <div class="divider"></div>
           
-          <div class="row"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div>
-          
-          <div class="text-center" style="margin: 8px 0;">
-            <div class="label" style="text-align:center; margin:0;">DESTINO</div>
-            <div class="value-large">${item.destino}</div>
-          </div>
-          
-          <div class="row"><span class="label">Fecha:</span> <span class="value">${item.fechaViaje}</span></div>
-          <div class="row"><span class="label">Hora:</span> <span class="value">${item.horaViaje}</span></div>
-          <div class="row"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div>
-          <div class="row"><span class="label">Asientos:</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Al abordar'}</span></div>
-          <div class="row"><span class="label">Total:</span> <span class="value">$${Number(item.monto).toFixed(2)} MXN</span></div>
-          
-          <div class="divider"></div>
-          
-          <div class="text-center">
+          <div class="qr-container">
             <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${item.folio}" alt="QR" />
-            <div class="label">Folio de Reserva</div>
-            <div class="text-bold" style="font-size: 12px;">${item.folio}</div>
-            <div style="font-size: 9px; margin-top: 4px;">Emitido: ${item.fechaCompleta}</div>
+            <div class="label" style="margin-top:4px;">Folio de Reserva</div>
+            <div class="text-bold" style="font-size: 13px;">${item.folio}</div>
+            <div style="font-size: 8px; margin-top: 4px;">Emitido: ${item.fechaCompleta}</div>
           </div>
 
           <div class="divider"></div>

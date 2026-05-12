@@ -544,10 +544,11 @@ export default function AdminDashboard() {
     document.body.removeChild(link);
   };
 
-  // NUEVA FUNCIÓN OPTIMIZADA PARA IMPRESORA TÉRMICA 58MM
+  // NUEVA FUNCIÓN OPTIMIZADA PARA IMPRESORA TÉRMICA 58MM (ANTI-ERRORES)
   const printTicket = (item: any) => {
     if (item.status !== 'pagado') { alert("Solo se pueden generar tickets de compras pagadas."); return; }
-    const printWindow = window.open('', '', 'width=350,height=600');
+    // Abrimos una ventana muy delgadita
+    const printWindow = window.open('', '', 'width=300,height=600');
     if (!printWindow) return;
     
     const html = `
@@ -556,25 +557,28 @@ export default function AdminDashboard() {
       <head>
         <title>Ticket ${item.folio}</title>
         <style>
-          /* 1. Resetear los márgenes automáticos del navegador */
-          @page { margin: 0; }
-          
-          body { 
-            font-family: 'Courier New', Courier, monospace; 
-            margin: 0; 
-            padding: 0; 
-            background-color: #fff;
-            color: #000;
+          /* 1. ESTO ES LA MAGIA: Fuerza al navegador a usar tamaño ticket y quitar márgenes */
+          @page { 
+            size: 58mm auto; 
+            margin: 0mm; 
           }
           
-          /* 2. Contenedor principal limitado estrictamente a 58mm */
+          /* 2. Forzamos el body para que no se estire nunca más allá de los 58mm */
+          html, body { 
+            width: 58mm !important;
+            margin: 0 !important; 
+            padding: 0 !important; 
+            background-color: #fff;
+            color: #000;
+            font-family: 'Courier New', Courier, monospace; 
+          }
+          
+          /* 3. Contenedor del ticket con área segura para que no corte letras */
           .ticket {
             width: 58mm;
-            max-width: 58mm;
-            /* 4mm de padding a los lados para no imprimir en el borde físico */
-            padding: 2mm 4mm; 
+            padding: 2mm 3mm; /* Margen interno pequeño */
             box-sizing: border-box;
-            font-size: 11px; /* Letra pequeña ideal para 58mm */
+            font-size: 11px; 
             line-height: 1.2;
           }
 
@@ -605,14 +609,13 @@ export default function AdminDashboard() {
           .row span.label {
             font-weight: bold;
             margin-right: 4px;
-            white-space: nowrap; /* Evita que la etiqueta se parta */
+            white-space: nowrap; 
           }
 
           .row span.value {
             text-align: right;
-            /* Si un texto (como el nombre) es muy largo, lo rompe hacia abajo */
             word-break: break-word; 
-            max-width: 60%;
+            max-width: 65%;
           }
 
           .total { 
@@ -652,13 +655,12 @@ export default function AdminDashboard() {
           
           <div class="footer">
             <p style="margin-bottom: 2px;">¡Gracias por su preferencia!</p>
-            <p style="font-size: 8px; margin-top:0;">Conserve este ticket para abordar</p>
+            <p style="font-size: 8px; margin-top:0;">Conserve este ticket</p>
           </div>
         </div>
         <script>
           window.onload = function() { 
             window.print(); 
-            // Esperar medio segundo antes de cerrar para que la impresora reciba la orden
             setTimeout(function(){ window.close(); }, 500);
           }
         </script>

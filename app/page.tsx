@@ -76,6 +76,11 @@ export default function AdminDashboard() {
     tripType: 'sencillo'
   });
 
+  // --- ESTADOS: EDICIÓN DE MÉTODO DE PAGO ---
+  const [showEditPaymentModal, setShowEditPaymentModal] = useState(false);
+  const [editingPayment, setEditingPayment] = useState({ id: '', folio: '', method: 'efectivo' });
+  const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
+
   useEffect(() => {
     setIsClient(true);
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -162,9 +167,11 @@ export default function AdminDashboard() {
           if (statusDB === 'paid' || statusDB === 'pagado' || statusDB === 'confirmed') estadoUI = 'pagado';
           else if (statusDB === 'cancelled' || statusDB === 'cancelado') estadoUI = 'cancelado';
 
+          // Mapeo mejorado de métodos de pago
           let metodoPagoUI = b.payment_method || 'N/A';
-          if (metodoPagoUI.includes('card')) metodoPagoUI = 'Tarjeta';
-          else if (metodoPagoUI.includes('cash')) metodoPagoUI = 'Efectivo';
+          if (metodoPagoUI.includes('card') || metodoPagoUI === 'tarjeta') metodoPagoUI = 'Tarjeta';
+          else if (metodoPagoUI.includes('cash') || metodoPagoUI === 'efectivo') metodoPagoUI = 'Efectivo';
+          else if (metodoPagoUI === 'transferencia') metodoPagoUI = 'Transferencia';
 
           let tipoViaje = 'Viaje Sencillo';
           if (b.is_15_days) tipoViaje = 'Paquete 15 Días';
@@ -221,6 +228,32 @@ export default function AdminDashboard() {
       fetchRealData(); 
     } catch (error: any) {
       alert("Error al eliminar la venta: " + error.message);
+    }
+  };
+
+  // --- LÓGICA PARA EDITAR MÉTODO DE PAGO ---
+  const handleUpdatePaymentMethod = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (userRole !== 'admin') return alert("Solo los administradores pueden editar el método de pago.");
+    
+    setIsUpdatingPayment(true);
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ payment_method: editingPayment.method })
+        .eq('id', editingPayment.id);
+        
+      if (error) throw error;
+      
+      await logAction('EDITAR_METODO_PAGO', `Cambió el método de pago del folio ${editingPayment.folio} a ${editingPayment.method.toUpperCase()}`);
+      alert("Método de pago actualizado exitosamente.");
+      
+      setShowEditPaymentModal(false);
+      fetchRealData();
+    } catch (error: any) {
+      alert("Error al actualizar método de pago: " + error.message);
+    } finally {
+      setIsUpdatingPayment(false);
     }
   };
 
@@ -1137,6 +1170,24 @@ export default function AdminDashboard() {
                                     <CheckSquare size={18} />
                                   </button>
                                 )}
+                                
+                                {/* NUEVO BOTÓN: Editar Método de Pago */}
+                                {userRole === 'admin' && (
+                                  <button 
+                                    onClick={() => {
+                                      let currentMethod = 'efectivo';
+                                      if (item.metodoPago === 'Tarjeta') currentMethod = 'tarjeta';
+                                      if (item.metodoPago === 'Transferencia') currentMethod = 'transferencia';
+                                      setEditingPayment({ id: item.id, folio: item.folio, method: currentMethod });
+                                      setShowEditPaymentModal(true);
+                                    }} 
+                                    className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-lg cursor-pointer transition-colors" 
+                                    title="Editar Método de Pago"
+                                  >
+                                    <CreditCard size={18} />
+                                  </button>
+                                )}
+
                                 <button onClick={() => printTicket(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-blue-600 hover:bg-blue-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title={item.status === 'pagado' ? 'Imprimir Recibo Corto (Ticket)' : 'Solo pagados'}>
                                   <Printer size={18} />
                                 </button>
@@ -1159,6 +1210,46 @@ export default function AdminDashboard() {
               </div>
             </div>
           </>
+        )}
+
+        {/* --- MODAL PARA EDITAR MÉTODO DE PAGO --- */}
+        {showEditPaymentModal && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+              <div className="bg-yellow-600 px-6 py-4 flex justify-between items-center text-white">
+                <h3 className="font-bold text-lg flex items-center gap-2"><CreditCard /> Editar Pago</h3>
+                <button onClick={() => setShowEditPaymentModal(false)} className="text-yellow-200 hover:text-white"><XCircle /></button>
+              </div>
+              
+              <form onSubmit={handleUpdatePaymentMethod} className="p-6 space-y-4">
+                <p className="text-sm text-gray-600">
+                  Modificando el método de pago para el folio <strong className="text-gray-900">{editingPayment.folio}</strong>
+                </p>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Nuevo Método</label>
+                  <select 
+                    value={editingPayment.method} 
+                    onChange={e => setEditingPayment({...editingPayment, method: e.target.value})} 
+                    className="w-full border rounded-lg p-2 text-sm font-semibold text-gray-800"
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta">Tarjeta</option>
+                    <option value="transferencia">Transferencia</option>
+                  </select>
+                </div>
+
+                <div className="pt-4 flex gap-3 border-t mt-6">
+                  <button type="button" onClick={() => setShowEditPaymentModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={isUpdatingPayment} className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-xl transition-colors">
+                    {isUpdatingPayment ? 'Guardando...' : 'Guardar Cambios'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
 
         {/* --- MODAL DE REGISTRO HISTÓRICO --- */}

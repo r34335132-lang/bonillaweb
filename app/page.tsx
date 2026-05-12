@@ -88,7 +88,12 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (session) {
-      if (session.user.email === 'admin@bonillatours.com' || session.user.email?.includes('admin')) {
+      const userEmail = session.user.email?.toLowerCase();
+      if (
+        userEmail === 'admin@bonillatours.com' || 
+        userEmail?.includes('admin') || 
+        userEmail === 'contabilidadbonillatours@gmail.com'
+      ) {
         setUserRole('admin');
       } else {
         setUserRole('supervisor');
@@ -539,29 +544,129 @@ export default function AdminDashboard() {
     document.body.removeChild(link);
   };
 
+  // NUEVA FUNCIÓN OPTIMIZADA PARA IMPRESORA TÉRMICA 58MM
   const printTicket = (item: any) => {
     if (item.status !== 'pagado') { alert("Solo se pueden generar tickets de compras pagadas."); return; }
-    const printWindow = window.open('', '', 'width=400,height=800');
+    const printWindow = window.open('', '', 'width=350,height=600');
     if (!printWindow) return;
-    const html = `<html><head><title>Ticket ${item.folio}</title><style>
-        body { font-family: monospace; padding: 20px; color: #000; width: 300px; margin: auto; min-height: 800px; }
-        .header { text-align: center; margin-bottom: 20px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
-        .row { display: flex; justify-content: space-between; margin-bottom: 8px; }
-        .total { font-size: 1.2em; font-weight: bold; border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
-        .footer { text-align: center; margin-top: 40px; font-size: 0.9em; padding-bottom: 50px; }
-      </style></head><body>
-        <div class="header"><h2>BONILLA TOURS</h2></div>
-        <div class="row"><span>Referencia:</span> <strong>${item.folio}</strong></div>
-        <div class="row"><span>Fecha Venta:</span> <span>${item.fechaCompleta}</span></div>
-        <div class="row"><span>Pasajero:</span> <span>${item.cliente}</span></div>
-        <div class="row"><span>Destino:</span> <span>${item.destino}</span></div>
-        <div class="row"><span>Concepto:</span> <span>${item.tipo}</span></div>
-        <div class="row"><span>Pago con:</span> <span>${item.metodoPago}</span></div>
-        <div class="row total"><span>TOTAL:</span> <span>$${Number(item.monto).toFixed(2)}</span></div>
-        <div class="footer"><p>¡Gracias por su preferencia!</p></div>
-        <script>window.onload = function() { window.print(); window.close(); }</script>
-      </body></html>`;
-    printWindow.document.write(html); printWindow.document.close();
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Ticket ${item.folio}</title>
+        <style>
+          /* 1. Resetear los márgenes automáticos del navegador */
+          @page { margin: 0; }
+          
+          body { 
+            font-family: 'Courier New', Courier, monospace; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #fff;
+            color: #000;
+          }
+          
+          /* 2. Contenedor principal limitado estrictamente a 58mm */
+          .ticket {
+            width: 58mm;
+            max-width: 58mm;
+            /* 4mm de padding a los lados para no imprimir en el borde físico */
+            padding: 2mm 4mm; 
+            box-sizing: border-box;
+            font-size: 11px; /* Letra pequeña ideal para 58mm */
+            line-height: 1.2;
+          }
+
+          .header { 
+            text-align: center; 
+            margin-bottom: 6px; 
+            border-bottom: 1px dashed #000; 
+            padding-bottom: 6px; 
+          }
+          
+          .header h2 { 
+            margin: 0; 
+            font-size: 14px; 
+            font-weight: bold;
+          }
+          
+          .header p {
+            margin: 2px 0 0 0;
+            font-size: 9px;
+          }
+
+          .row { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 4px;
+          }
+
+          .row span.label {
+            font-weight: bold;
+            margin-right: 4px;
+            white-space: nowrap; /* Evita que la etiqueta se parta */
+          }
+
+          .row span.value {
+            text-align: right;
+            /* Si un texto (como el nombre) es muy largo, lo rompe hacia abajo */
+            word-break: break-word; 
+            max-width: 60%;
+          }
+
+          .total { 
+            font-size: 13px; 
+            font-weight: bold; 
+            border-top: 1px dashed #000; 
+            padding-top: 6px; 
+            margin-top: 6px; 
+          }
+
+          .footer { 
+            text-align: center; 
+            margin-top: 15px; 
+            font-size: 10px; 
+            padding-bottom: 15px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="ticket">
+          <div class="header">
+            <h2>BONILLA TOURS</h2>
+            <p>Comprobante de Pago</p>
+          </div>
+          
+          <div class="row"><span class="label">Folio:</span> <span class="value">${item.folio}</span></div>
+          <div class="row"><span class="label">Fecha:</span> <span class="value">${item.fechaCompleta}</span></div>
+          
+          <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+          
+          <div class="row"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div>
+          <div class="row"><span class="label">Destino:</span> <span class="value">${item.destino}</span></div>
+          <div class="row"><span class="label">Concepto:</span> <span class="value">${item.tipo}</span></div>
+          <div class="row"><span class="label">Método:</span> <span class="value">${item.metodoPago}</span></div>
+          
+          <div class="row total"><span class="label">TOTAL:</span> <span class="value">$${Number(item.monto).toFixed(2)}</span></div>
+          
+          <div class="footer">
+            <p style="margin-bottom: 2px;">¡Gracias por su preferencia!</p>
+            <p style="font-size: 8px; margin-top:0;">Conserve este ticket para abordar</p>
+          </div>
+        </div>
+        <script>
+          window.onload = function() { 
+            window.print(); 
+            // Esperar medio segundo antes de cerrar para que la impresora reciba la orden
+            setTimeout(function(){ window.close(); }, 500);
+          }
+        </script>
+      </body>
+      </html>
+    `;
+    printWindow.document.write(html); 
+    printWindow.document.close();
   };
 
   const printBoleto = (item: any) => {

@@ -48,11 +48,9 @@ export default function AdminDashboard() {
   const [manifestPassengers, setManifestPassengers] = useState<any[]>([]);
   const [loadingManifest, setLoadingManifest] = useState(false);
 
-  // --- ESTADOS: CREAR VIAJE (Restaurado con JSONs y 15 días) ---
+  // --- ESTADOS: CREAR VIAJE (Totalmente simplificado, los precios se sacan del Tarifario) ---
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
-  const [tripForm, setTripForm] = useState({ origin: 'Durango', destination: 'Guadalajara', date: '', departure_time: '', arrival_time: '', total_seats: '40', bus_type: 'Primera Clase', price: '800', price_15_days: '1400' });
-  const [cityPrices, setCityPrices] = useState<Record<string, string>>({});
-  const [cityRoundPrices, setCityRoundPrices] = useState<Record<string, string>>({});
+  const [tripForm, setTripForm] = useState({ origin: 'Durango', destination: 'Guadalajara', date: '', departure_time: '', arrival_time: '', total_seats: '40', bus_type: 'Primera Clase' });
 
   // --- ESTADOS: PAQUETERÍA Y TARIFARIO ---
   const [isCreatingParcel, setIsCreatingParcel] = useState(false);
@@ -116,11 +114,6 @@ export default function AdminDashboard() {
     if (activeTab === 'viajes') fetchAllTrips();
   }, [activeTab]);
 
-  // Autollenado de la matriz de precios al cambiar origen/destino en Crear Viaje
-  useEffect(() => {
-    if (defaultPrices.length > 0) autoFillPrices(tripForm.origin, tripForm.destination, defaultPrices);
-  }, [defaultPrices, tripForm.origin, tripForm.destination]);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
@@ -143,7 +136,6 @@ export default function AdminDashboard() {
     if (data) setLogs(data);
   };
 
-  // --- LÓGICA DE VIAJES Y MANIFIESTO ---
   const fetchAllTrips = async () => {
     const { data } = await supabase.from('trips').select('*').order('date', { ascending: false });
     if (data) setAllTrips(data);
@@ -152,13 +144,7 @@ export default function AdminDashboard() {
   const fetchManifest = async (trip: any) => {
     setManifestTrip(trip);
     setLoadingManifest(true);
-    const { data } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('trip_id', trip.id)
-      .neq('status', 'cancelled')
-      .order('passenger_name', { ascending: true });
-    
+    const { data } = await supabase.from('bookings').select('*').eq('trip_id', trip.id).neq('status', 'cancelled').order('passenger_name', { ascending: true });
     if (data) setManifestPassengers(data);
     setLoadingManifest(false);
   };
@@ -345,7 +331,6 @@ export default function AdminDashboard() {
     setTaquillaOccupiedSeats(Array.from(new Set(occupied)));
     setTaquillaSelectedSeats([]);
 
-    // Extraer el precio global del Tarifario (route_prices)
     const { data: priceData } = await supabase
       .from('route_prices')
       .select('*')
@@ -358,7 +343,6 @@ export default function AdminDashboard() {
       else if (taquillaPassenger.tripType === '15_dias') finalPrice = priceData.price_15_days;
       else finalPrice = priceData.price_one_way;
     } else {
-      // Fallback si no está en Tarifario
       finalPrice = trip.price;
     }
     
@@ -440,26 +424,7 @@ export default function AdminDashboard() {
     } catch (error: any) { alert("Error: " + error.message); } finally { setIsSavingPrice(false); }
   };
 
-  // Autollenado para la matriz
-  const autoFillPrices = (originName: string, destName: string, tarifario: any[]) => {
-    const oIdx = BONILLA_ROUTE.indexOf(originName);
-    const dIdx = BONILLA_ROUTE.indexOf(destName);
-    let stops: string[] = [];
-    if (oIdx !== -1 && dIdx !== -1 && oIdx !== dIdx) {
-      if (oIdx < dIdx) stops = BONILLA_ROUTE.slice(oIdx + 1, dIdx + 1);
-      else stops = BONILLA_ROUTE.slice(dIdx, oIdx).reverse();
-    }
-    const newCityPrices: Record<string, string> = {};
-    const newRoundPrices: Record<string, string> = {};
-    stops.forEach(dest => {
-      const def = tarifario.find(p => (p.origin === originName && p.destination === dest) || (p.origin === dest && p.destination === originName));
-      newCityPrices[dest] = def ? def.price_one_way.toString() : '';
-      newRoundPrices[dest] = def ? def.price_round_trip.toString() : '';
-    });
-    setCityPrices(newCityPrices); setCityRoundPrices(newRoundPrices);
-  };
-
-  // --- RESTAURADO: CREAR VIAJE CON MATRIZ DE PRECIOS Y 15 DIAS ---
+  // --- PROGRAMAR VIAJE (Totalmente limpio, sin precios) ---
   const handleCreateTrip = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsCreatingTrip(true);
@@ -470,11 +435,11 @@ export default function AdminDashboard() {
         date: tripForm.date, 
         departure_time: tripForm.departure_time, 
         arrival_time: tripForm.arrival_time, 
-        duration: "Aprox 10h", 
-        price: Number(tripForm.price), 
-        prices: cityPrices, 
-        round_trip_prices: cityRoundPrices, 
-        price_15_days: Number(tripForm.price_15_days) || 0,
+        duration: "Ruta Base", 
+        price: 0, 
+        prices: {}, 
+        round_trip_prices: {}, 
+        price_15_days: 0,
         total_seats: Number(tripForm.total_seats), 
         available_seats: Number(tripForm.total_seats), 
         occupied_seats: [], 
@@ -483,9 +448,9 @@ export default function AdminDashboard() {
       });
       if (error) throw error;
       await logAction('CREAR_VIAJE', `Programó viaje de ${tripForm.origin} a ${tripForm.destination} para el ${tripForm.date}`);
-      alert("¡Viaje publicado!");
+      alert("¡Viaje programado con éxito!");
       setTripForm({ ...tripForm, date: "", departure_time: "", arrival_time: "" }); 
-    } catch (error: any) { alert("Error: " + error.message); } finally { setIsCreatingTrip(false); }
+    } catch (error: any) { alert("Error al guardar: " + error.message); } finally { setIsCreatingTrip(false); }
   };
 
   const handleCreateParcel = async (e: React.FormEvent) => {
@@ -737,13 +702,7 @@ export default function AdminDashboard() {
 
                   <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg">
                     <label className="block text-xs font-bold text-orange-900 mb-1">Fecha de Registro de Venta</label>
-                    <input 
-                      type="date" 
-                      required 
-                      value={taquillaSaleDate} 
-                      onChange={e => setTaquillaSaleDate(e.target.value)} 
-                      className="w-full border rounded-lg p-2 text-sm text-orange-900 bg-white border-orange-300" 
-                    />
+                    <input type="date" required value={taquillaSaleDate} onChange={e => setTaquillaSaleDate(e.target.value)} className="w-full border rounded-lg p-2 text-sm text-orange-900 bg-white border-orange-300" />
                   </div>
 
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mt-4 flex justify-between items-center">
@@ -760,63 +719,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* --- VISTA: PROGRAMAR VIAJE --- */}
-        {activeTab === 'crear-viaje' && (
-          <div className="bg-white rounded-xl border shadow-sm p-8 max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2"><Bus className="text-blue-600" /> Crear Salida y Matriz de Precios</h2>
-            <form onSubmit={handleCreateTrip} className="space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-xl border">
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Origen General</label><select value={tripForm.origin} onChange={e => setTripForm({...tripForm, origin: e.target.value})} className="w-full border rounded-lg p-2 bg-white">{BONILLA_ROUTE.map(city => <option key={city} value={city}>{city}</option>)}</select></div>
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Destino Final</label><select value={tripForm.destination} onChange={(e) => setTripForm({...tripForm, destination: e.target.value})} className="w-full border rounded-lg p-2 bg-white">{BONILLA_ROUTE.map(city => <option key={city} value={city}>{city}</option>)}</select></div>
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Fecha Salida</label><input type="date" required value={tripForm.date} onChange={(e) => setTripForm({...tripForm, date: e.target.value})} className="w-full border rounded-lg p-2" /></div>
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Hora Salida</label><input type="time" required value={tripForm.departure_time} onChange={(e) => setTripForm({...tripForm, departure_time: e.target.value})} className="w-full border rounded-lg p-2" /></div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-                  <label className="block text-xs font-bold text-blue-800 mb-1">Precio Base (Ida) $</label>
-                  <input type="number" required value={tripForm.price} onChange={(e) => setTripForm({...tripForm, price: e.target.value})} className="w-full border border-blue-300 rounded-lg p-2 text-sm font-bold bg-white" />
-                </div>
-                <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl flex items-center gap-4">
-                  <div className="bg-purple-100 p-3 rounded-full"><CalendarDays className="text-purple-600" size={24} /></div>
-                  <div className="flex-1">
-                    <label className="block text-xs font-bold text-purple-800 mb-1">Precio 15 Días $</label>
-                    <input type="number" value={tripForm.price_15_days} onChange={(e) => setTripForm({...tripForm, price_15_days: e.target.value})} className="w-full border border-purple-300 rounded-lg p-2 text-sm font-bold text-purple-900 bg-white" placeholder="Ej. 1400" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="border rounded-xl overflow-hidden">
-                <div className="bg-blue-900 px-4 py-3 text-white font-bold flex justify-between items-center">
-                  <span>Precios Dinámicos: {tripForm.origin} ➔ {tripForm.destination}</span>
-                  <span className="text-xs font-normal bg-blue-800 px-3 py-1 rounded border border-blue-700">Se llenan solos desde Tarifario</span>
-                </div>
-                <div className="p-4 space-y-3 bg-white">
-                  {BONILLA_ROUTE.slice(BONILLA_ROUTE.indexOf(tripForm.origin) + 1).map((dest: string) => {
-                    // Evitar mostrar la parada si está después del destino final
-                    if (BONILLA_ROUTE.indexOf(dest) > BONILLA_ROUTE.indexOf(tripForm.destination)) return null;
-
-                    return (
-                      <div key={dest} className="flex items-center justify-between border-b pb-3">
-                        <span className="font-bold text-gray-700 w-1/3">Baja en: {dest}</span>
-                        <div className="flex gap-4 w-2/3">
-                          <div className="flex-1"><label className="text-xs text-gray-500">Sencillo ($)</label><input type="number" placeholder="0" value={cityPrices[dest] || ''} onChange={(e) => setCityPrices({...cityPrices, [dest]: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
-                          <div className="flex-1"><label className="text-xs text-gray-500">Redondo ($)</label><input type="number" placeholder="0" value={cityRoundPrices[dest] || ''} onChange={(e) => setCityRoundPrices({...cityRoundPrices, [dest]: e.target.value})} className="w-full border rounded-lg p-2 text-sm border-blue-200 bg-blue-50" /></div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-6">
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Nº Asientos</label><input type="number" required value={tripForm.total_seats} onChange={(e) => setTripForm({...tripForm, total_seats: e.target.value})} className="w-full border rounded-lg p-3" /></div>
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Hora Llegada (Dest. Final)</label><input type="time" required value={tripForm.arrival_time} onChange={(e) => setTripForm({...tripForm, arrival_time: e.target.value})} className="w-full border rounded-lg p-3" /></div>
-              </div>
-              <button type="submit" disabled={isCreatingTrip} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors flex justify-center items-center gap-2">{isCreatingTrip ? 'Guardando Viaje...' : <><CheckCircle size={20}/> Publicar Viaje y Precios</>}</button>
-            </form>
-          </div>
-        )}
-
         {/* --- VISTA: HISTORIAL DE MOVIMIENTOS --- */}
         {activeTab === 'movimientos' && (
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden max-w-6xl mx-auto">
@@ -826,26 +728,17 @@ export default function AdminDashboard() {
             <div className="overflow-x-auto max-h-[600px]">
               <table className="w-full text-left text-sm">
                 <thead className="bg-white text-gray-500 font-medium border-b sticky top-0">
-                  <tr>
-                    <th className="px-6 py-4">Fecha / Hora</th>
-                    <th className="px-6 py-4">Usuario Responsable</th>
-                    <th className="px-6 py-4">Tipo de Acción</th>
-                    <th className="px-6 py-4">Detalles</th>
-                  </tr>
+                  <tr><th className="px-6 py-4">Fecha / Hora</th><th className="px-6 py-4">Usuario Responsable</th><th className="px-6 py-4">Acción</th><th className="px-6 py-4">Detalles</th></tr>
                 </thead>
                 <tbody className="divide-y text-gray-800">
                   {logs.length === 0 ? (
-                    <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No hay movimientos registrados.</td></tr>
+                    <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No hay movimientos.</td></tr>
                   ) : (
                     logs.map((log: any) => (
                       <tr key={log.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-gray-500">{new Date(log.created_at).toLocaleString()}</td>
                         <td className="px-6 py-4 font-bold">{log.user_email}</td>
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${log.action.includes('BORRAR') ? 'bg-red-100 text-red-700' : log.action.includes('EDITAR') ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {log.action}
-                          </span>
-                        </td>
+                        <td className="px-6 py-4"><span className={`px-3 py-1 rounded-full text-xs font-bold ${log.action.includes('BORRAR') ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{log.action}</span></td>
                         <td className="px-6 py-4">{log.description}</td>
                       </tr>
                     ))
@@ -864,28 +757,15 @@ export default function AdminDashboard() {
                 <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-xl border p-4 text-center">
                   <Lock className="text-gray-400 mb-2" size={32}/>
                   <p className="font-bold text-gray-800">Acceso Restringido</p>
-                  <p className="text-xs text-gray-500">Solo administradores pueden cambiar tarifas globales.</p>
                 </div>
               )}
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><Edit3 className="text-purple-600" /> Configurar Ruta</h2>
               <form onSubmit={handleSavePrice} className="space-y-4">
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Sube en (Origen)</label><select value={priceForm.origin} onChange={e => setPriceForm({...priceForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Baja en (Destino)</label><select value={priceForm.destination} onChange={e => setPriceForm({...priceForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Precio Normal (Ida) $</label>
-                  <input type="number" required value={priceForm.price_one_way} onChange={e => setPriceForm({...priceForm, price_one_way: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Precio Ida y Vuelta $</label>
-                  <input type="number" required value={priceForm.price_round_trip} onChange={e => setPriceForm({...priceForm, price_round_trip: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Precio 15 Días $</label>
-                  <input type="number" required value={priceForm.price_15_days} onChange={e => setPriceForm({...priceForm, price_15_days: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
-                </div>
-
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Precio Normal (Ida) $</label><input type="number" required value={priceForm.price_one_way} onChange={e => setPriceForm({...priceForm, price_one_way: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Precio Ida y Vuelta $</label><input type="number" required value={priceForm.price_round_trip} onChange={e => setPriceForm({...priceForm, price_round_trip: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Precio 15 Días $</label><input type="number" required value={priceForm.price_15_days} onChange={e => setPriceForm({...priceForm, price_15_days: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
                 <button type="submit" disabled={isSavingPrice} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg text-sm transition-colors">{isSavingPrice ? 'Guardando...' : 'Guardar en Base de Datos'}</button>
               </form>
             </div>
@@ -895,12 +775,7 @@ export default function AdminDashboard() {
               <div className="overflow-x-auto max-h-[500px]">
                 <table className="w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-white text-gray-500 font-medium border-b sticky top-0">
-                    <tr>
-                      <th className="px-4 py-3">Ruta Principal</th>
-                      <th className="px-4 py-3 text-right">Ida</th>
-                      <th className="px-4 py-3 text-right">Ida y Vuelta</th>
-                      <th className="px-4 py-3 text-right">15 Días</th>
-                    </tr>
+                    <tr><th className="px-4 py-3">Ruta Principal</th><th className="px-4 py-3 text-right">Ida</th><th className="px-4 py-3 text-right">Ida y Vuelta</th><th className="px-4 py-3 text-right">15 Días</th></tr>
                   </thead>
                   <tbody className="divide-y text-gray-800">
                     {defaultPrices.map((p: any) => (
@@ -915,6 +790,35 @@ export default function AdminDashboard() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* --- VISTA: PROGRAMAR VIAJE (Totalmente Limpia, sin el recuadro que confundía) --- */}
+        {activeTab === 'crear-viaje' && (
+          <div className="bg-white rounded-xl border shadow-sm p-8 max-w-2xl mx-auto">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2"><Bus className="text-blue-600" /> Programar Salida de Autobús</h2>
+            <p className="text-gray-500 mb-6 text-sm">
+              Solo necesitas configurar el horario de base a base. Los precios para cada parada se asignarán <strong>automáticamente</strong> consultando el Tarifario.
+            </p>
+            <form onSubmit={handleCreateTrip} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Sale desde</label><select value={tripForm.origin} onChange={e => setTripForm({...tripForm, origin: e.target.value})} className="w-full border rounded-lg p-2 bg-white">{BONILLA_ROUTE.map(city => <option key={city} value={city}>{city}</option>)}</select></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Llega hasta</label><select value={tripForm.destination} onChange={(e) => setTripForm({...tripForm, destination: e.target.value})} className="w-full border rounded-lg p-2 bg-white">{BONILLA_ROUTE.map(city => <option key={city} value={city}>{city}</option>)}</select></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Fecha de Salida</label><input type="date" required value={tripForm.date} onChange={(e) => setTripForm({...tripForm, date: e.target.value})} className="w-full border rounded-lg p-2" /></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Hora de Salida</label><input type="time" required value={tripForm.departure_time} onChange={(e) => setTripForm({...tripForm, departure_time: e.target.value})} className="w-full border rounded-lg p-2" /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Nº Asientos del Camión</label><input type="number" required value={tripForm.total_seats} onChange={(e) => setTripForm({...tripForm, total_seats: e.target.value})} className="w-full border rounded-lg p-2" /></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Tipo de Autobús</label><input type="text" value={tripForm.bus_type} onChange={(e) => setTripForm({...tripForm, bus_type: e.target.value})} placeholder="Ej. Primera Clase" className="w-full border rounded-lg p-2" /></div>
+              </div>
+              <div><label className="block text-sm font-bold text-gray-700 mb-1">Hora Llegada Aprox. (Destino Final)</label><input type="time" required value={tripForm.arrival_time} onChange={(e) => setTripForm({...tripForm, arrival_time: e.target.value})} className="w-full border rounded-lg p-2" /></div>
+              
+              <button type="submit" disabled={isCreatingTrip} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors flex justify-center items-center gap-2">
+                {isCreatingTrip ? 'Guardando Viaje...' : <><CheckCircle size={20}/> Publicar Viaje</>}
+              </button>
+            </form>
           </div>
         )}
 
@@ -1084,6 +988,61 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* --- MODAL DE MANIFIESTO (LISTA DE PASAJEROS) --- */}
+        {manifestTrip && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh]">
+              <div className="bg-cyan-900 px-6 py-4 flex justify-between items-start text-white shrink-0">
+                <div>
+                  <h3 className="font-bold text-xl flex items-center gap-2"><Users /> Lista de Pasajeros</h3>
+                  <p className="text-sm text-cyan-200 mt-1">Autobús de la ruta: <span className="font-bold text-white">{manifestTrip.origin} ➔ {manifestTrip.destination}</span></p>
+                  <p className="text-sm text-cyan-200">Fecha y Hora: {manifestTrip.date} a las {manifestTrip.departure_time}</p>
+                </div>
+                <button onClick={() => setManifestTrip(null)} className="text-cyan-200 hover:text-white p-1"><XCircle size={28} /></button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto">
+                {loadingManifest ? (
+                  <div className="text-center py-10"><p className="text-gray-500 font-medium">Cargando lista de pasajeros...</p></div>
+                ) : manifestPassengers.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Users size={32} className="text-gray-400" /></div>
+                    <p className="text-gray-600 font-medium text-lg">Aún no hay boletos vendidos para este viaje.</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-50 text-gray-500 font-medium border-b sticky top-0">
+                      <tr><th className="px-4 py-3">Folio/Ref</th><th className="px-4 py-3">Nombre del Pasajero</th><th className="px-4 py-3 text-center">Asientos</th><th className="px-4 py-3 text-center">Estado</th><th className="px-4 py-3 text-center">Acción</th></tr>
+                    </thead>
+                    <tbody className="divide-y text-gray-800">
+                      {manifestPassengers.map(p => {
+                        const isBoarded = p.status === 'boarded';
+                        return (
+                          <tr key={p.id} className="hover:bg-cyan-50 transition-colors">
+                            <td className="px-4 py-4 font-mono font-bold text-gray-600">{p.booking_ref}</td>
+                            <td className="px-4 py-4">
+                              <span className="font-bold text-gray-900 block">{p.passenger_name}</span>
+                              <span className="text-xs text-gray-500 mt-1 block">Ruta: {p.origin} ➔ {p.destination}</span>
+                            </td>
+                            <td className="px-4 py-4 text-center font-bold">{p.seats.join(', ') || 'N/A'}</td>
+                            <td className="px-4 py-4 text-center">
+                              {isBoarded ? <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full text-xs font-black">ABORDÓ</span> : <span className="bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1 rounded-full text-xs font-black">PENDIENTE</span>}
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              {!isBoarded ? (
+                                <button onClick={() => handleManualBoarding(p.id, p.passenger_name)} className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95">DAR ACCESO</button>
+                              ) : <span className="text-gray-400 text-xs font-medium">—</span>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

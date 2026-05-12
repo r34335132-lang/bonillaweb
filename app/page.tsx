@@ -2,9 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase'; 
-import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare, History, Trash2, Map, Users } from 'lucide-react';
+import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare, History, Trash2 } from 'lucide-react';
 
-type TabType = 'pagados' | 'intentos' | 'viajes' | 'taquilla' | 'crear-viaje' | 'paqueteria' | 'tarifario' | 'movimientos';
+type TabType = 'pagados' | 'intentos' | 'taquilla' | 'crear-viaje' | 'paqueteria' | 'tarifario' | 'movimientos';
 
 const BONILLA_ROUTE = [
   "Durango", 
@@ -42,12 +42,6 @@ export default function AdminDashboard() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  // --- ESTADOS: VIAJES Y MANIFIESTO ---
-  const [allTrips, setAllTrips] = useState<any[]>([]);
-  const [manifestTrip, setManifestTrip] = useState<any>(null);
-  const [manifestPassengers, setManifestPassengers] = useState<any[]>([]);
-  const [loadingManifest, setLoadingManifest] = useState(false);
-
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [tripForm, setTripForm] = useState({ origin: 'Durango', destination: 'Guadalajara', date: '', departure_time: '', arrival_time: '', total_seats: '40', bus_type: 'Primera Clase', price_15_days: '' });
   const [cityPrices, setCityPrices] = useState<Record<string, string>>({});
@@ -55,8 +49,10 @@ export default function AdminDashboard() {
 
   const [isCreatingParcel, setIsCreatingParcel] = useState(false);
   const [parcelForm, setParcelForm] = useState({ sender: '', receiver: '', origin: 'Durango', destination: 'Guadalajara', price: '' });
+  
+  // --- ACTUALIZADO: SE AGREGÓ price_15_days AL ESTADO DEL TARIFARIO ---
   const [isSavingPrice, setIsSavingPrice] = useState(false);
-  const [priceForm, setPriceForm] = useState({ origin: 'Durango', destination: 'Guadalajara', price_one_way: '', price_round_trip: '' });
+  const [priceForm, setPriceForm] = useState({ origin: 'Durango', destination: 'Guadalajara', price_one_way: '', price_round_trip: '', price_15_days: '' });
 
   // --- ESTADOS: TAQUILLA ---
   const [taquillaSaleDate, setTaquillaSaleDate] = useState(new Date().toISOString().split('T')[0]);
@@ -119,7 +115,6 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (activeTab === 'movimientos') fetchLogs();
-    if (activeTab === 'viajes') fetchAllTrips();
   }, [activeTab]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -154,37 +149,6 @@ export default function AdminDashboard() {
     if (data) setLogs(data);
   };
 
-  // --- LÓGICA DE VIAJES Y MANIFIESTO ---
-  const fetchAllTrips = async () => {
-    const { data, error } = await supabase.from('trips').select('*').order('date', { ascending: false });
-    if (data) setAllTrips(data);
-  };
-
-  const fetchManifest = async (trip: any) => {
-    setManifestTrip(trip);
-    setLoadingManifest(true);
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('trip_id', trip.id)
-      .neq('status', 'cancelled')
-      .order('passenger_name', { ascending: true });
-    
-    if (data) setManifestPassengers(data);
-    setLoadingManifest(false);
-  };
-
-  const handleManualBoarding = async (bookingId: string, passengerName: string) => {
-    if (!window.confirm(`¿Confirmas que deseas dar acceso (ABORDADO) a ${passengerName}?`)) return;
-    try {
-      const { error } = await supabase.from('bookings').update({ status: 'boarded' }).eq('id', bookingId);
-      if (error) throw error;
-      setManifestPassengers(prev => prev.map(p => p.id === bookingId ? { ...p, status: 'boarded' } : p));
-    } catch (error: any) {
-      alert("Error al dar acceso: " + error.message);
-    }
-  };
-
   const fetchRealData = async () => {
     setLoading(true);
     try {
@@ -202,9 +166,10 @@ export default function AdminDashboard() {
           
           let estadoUI = 'pendiente'; 
           const statusDB = b.status?.toLowerCase();
-          if (statusDB === 'paid' || statusDB === 'pagado' || statusDB === 'confirmed' || statusDB === 'boarded') estadoUI = 'pagado';
+          if (statusDB === 'paid' || statusDB === 'pagado' || statusDB === 'confirmed') estadoUI = 'pagado';
           else if (statusDB === 'cancelled' || statusDB === 'cancelado') estadoUI = 'cancelado';
 
+          // Mapeo mejorado de métodos de pago
           let metodoPagoUI = b.payment_method || 'N/A';
           if (metodoPagoUI.includes('card') || metodoPagoUI === 'tarjeta') metodoPagoUI = 'Tarjeta';
           else if (metodoPagoUI.includes('cash') || metodoPagoUI === 'efectivo') metodoPagoUI = 'Efectivo';
@@ -227,7 +192,7 @@ export default function AdminDashboard() {
         setData(formateados);
       }
       const { data: parcelsData } = await supabase
-        .from('parels')
+        .from('parcels')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(1500);
@@ -268,6 +233,7 @@ export default function AdminDashboard() {
     }
   };
 
+  // --- LÓGICA PARA EDITAR MÉTODO DE PAGO ---
   const handleUpdatePaymentMethod = async (e: React.FormEvent) => {
     e.preventDefault();
     if (userRole !== 'admin') return alert("Solo los administradores pueden editar el método de pago.");
@@ -293,6 +259,7 @@ export default function AdminDashboard() {
     }
   };
 
+  // --- LÓGICA DE REGISTRO HISTÓRICO ---
   const handleSaveHistoricalBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingHistory(true);
@@ -369,6 +336,7 @@ export default function AdminDashboard() {
     }
   };
 
+  // --- LÓGICA DE TAQUILLA ---
   const handleSearchTaquilla = async (e: React.FormEvent) => {
     e.preventDefault();
     const { data, error } = await supabase.from('trips').select('*').eq('date', taquillaForm.date);
@@ -409,31 +377,46 @@ export default function AdminDashboard() {
     setTaquillaOccupiedSeats(Array.from(new Set(occupied)));
     setTaquillaSelectedSeats([]);
 
-    let baseP = trip.price;
-    if (taquillaPassenger.tripType === 'redondo') {
-      if (trip.round_trip_prices && trip.round_trip_prices[taquillaForm.destination]) baseP = Number(trip.round_trip_prices[taquillaForm.destination]);
-    } else if (taquillaPassenger.tripType === '15_dias') {
-      if (trip.price_15_days) baseP = Number(trip.price_15_days);
-    } else {
-      if (trip.prices && trip.prices[taquillaForm.destination]) baseP = Number(trip.prices[taquillaForm.destination]);
-    }
+    // NUEVO: Busca el precio en la tabla global de tarifas (route_prices)
+    const { data: priceData } = await supabase
+      .from('route_prices')
+      .select('*')
+      .eq('origin', taquillaForm.origin)
+      .eq('destination', taquillaForm.destination)
+      .single();
+
+    let finalPrice = trip.price; // Precio por defecto
     
-    setTaquillaPassenger(prev => ({ ...prev, name: '', phone: '', status: 'confirmed', priceOverride: baseP.toString() }));
+    if (priceData) {
+      if (taquillaPassenger.tripType === 'redondo') finalPrice = priceData.price_round_trip;
+      else if (taquillaPassenger.tripType === '15_dias') finalPrice = priceData.price_15_days;
+      else finalPrice = priceData.price_one_way;
+    }
+
+    setTaquillaPassenger(prev => ({ ...prev, name: '', phone: '', status: 'confirmed', priceOverride: finalPrice.toString() }));
     setTaquillaSelectedTrip(trip);
   };
 
-  const handleTaquillaTripTypeChange = (type: string) => {
+  const handleTaquillaTripTypeChange = async (type: string) => {
     setTaquillaPassenger(prev => ({ ...prev, tripType: type }));
     
     if (taquillaSelectedTrip) {
+      // Recalcular precio en base al tarifario global al cambiar el tipo
+      const { data: priceData } = await supabase
+        .from('route_prices')
+        .select('*')
+        .eq('origin', taquillaForm.origin)
+        .eq('destination', taquillaForm.destination)
+        .single();
+
       let newP = taquillaSelectedTrip.price;
-      if (type === 'redondo' && taquillaSelectedTrip.round_trip_prices && taquillaSelectedTrip.round_trip_prices[taquillaForm.destination]) {
-        newP = Number(taquillaSelectedTrip.round_trip_prices[taquillaForm.destination]);
-      } else if (type === '15_dias' && taquillaSelectedTrip.price_15_days) {
-        newP = Number(taquillaSelectedTrip.price_15_days);
-      } else if (type === 'sencillo' && taquillaSelectedTrip.prices && taquillaSelectedTrip.prices[taquillaForm.destination]) {
-        newP = Number(taquillaSelectedTrip.prices[taquillaForm.destination]);
+      
+      if (priceData) {
+        if (type === 'redondo') newP = priceData.price_round_trip;
+        else if (type === '15_dias') newP = priceData.price_15_days;
+        else newP = priceData.price_one_way;
       }
+      
       setTaquillaPassenger(prev => ({ ...prev, priceOverride: newP.toString() }));
     }
   };
@@ -481,22 +464,35 @@ export default function AdminDashboard() {
     else setTaquillaSelectedSeats([...taquillaSelectedSeats, seat]);
   };
 
+  // --- ACTUALIZADO: LOGICA PARA GUARDAR PRECIOS EN EL TARIFARIO (CON 15 DIAS) ---
   const handleSavePrice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (priceForm.origin === priceForm.destination) return alert("Origen y destino iguales.");
     setIsSavingPrice(true);
     try {
       const existe = defaultPrices.find(p => (p.origin === priceForm.origin && p.destination === priceForm.destination) || (p.origin === priceForm.destination && p.destination === priceForm.origin));
+      
       if (existe) {
-        await supabase.from('route_prices').update({ price_one_way: Number(priceForm.price_one_way), price_round_trip: Number(priceForm.price_round_trip) }).eq('id', existe.id);
+        await supabase.from('route_prices').update({ 
+          price_one_way: Number(priceForm.price_one_way), 
+          price_round_trip: Number(priceForm.price_round_trip),
+          price_15_days: Number(priceForm.price_15_days)
+        }).eq('id', existe.id);
         await logAction('EDITAR_PRECIO', `Actualizó tarifa ${priceForm.origin} - ${priceForm.destination}`);
         alert("Tarifa actualizada.");
       } else {
-        await supabase.from('route_prices').insert({ origin: priceForm.origin, destination: priceForm.destination, price_one_way: Number(priceForm.price_one_way), price_round_trip: Number(priceForm.price_round_trip) });
+        await supabase.from('route_prices').insert({ 
+          origin: priceForm.origin, 
+          destination: priceForm.destination, 
+          price_one_way: Number(priceForm.price_one_way), 
+          price_round_trip: Number(priceForm.price_round_trip),
+          price_15_days: Number(priceForm.price_15_days)
+        });
         await logAction('NUEVO_PRECIO', `Creó tarifa ${priceForm.origin} - ${priceForm.destination}`);
         alert("Tarifa guardada.");
       }
-      setPriceForm({...priceForm, price_one_way: '', price_round_trip: ''});
+      
+      setPriceForm({ origin: 'Durango', destination: 'Guadalajara', price_one_way: '', price_round_trip: '', price_15_days: '' });
       const { data: pricesData } = await supabase.from('route_prices').select('*');
       if (pricesData) setDefaultPrices(pricesData);
     } catch (error: any) { alert("Error: " + error.message); } finally { setIsSavingPrice(false); }
@@ -762,36 +758,12 @@ export default function AdminDashboard() {
           <button onClick={() => setActiveTab('pagados')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'pagados' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Boletos Vendidos</button>
           <button onClick={() => setActiveTab('intentos')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'intentos' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Intentos / Pendientes</button>
           
-          {/* NUEVA PESTAÑA DE VIAJES Y MANIFIESTO */}
-          <button onClick={() => setActiveTab('viajes')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'viajes' ? 'bg-cyan-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Map size={18} /> Viajes</button>
-
           <button onClick={() => setActiveTab('taquilla')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'taquilla' ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Ticket size={18} /> Taquilla (Vender)</button>
           <button onClick={() => setActiveTab('paqueteria')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'paqueteria' ? 'bg-orange-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Package size={18} /> Paquetería</button>
           <button onClick={() => setActiveTab('crear-viaje')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'crear-viaje' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><PlusCircle size={18} /> Programar Viaje</button>
           <button onClick={() => setActiveTab('tarifario')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'tarifario' ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Edit3 size={18} /> Tarifario</button>
           <button onClick={() => setActiveTab('movimientos')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'movimientos' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><History size={18} /> Movimientos</button>
         </div>
-
-        {/* --- VISTA: VIAJES (NUEVA) --- */}
-        {activeTab === 'viajes' && (
-          <div className="bg-white rounded-xl border shadow-sm p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2"><Map className="text-cyan-600" /> Viajes Programados (Toca para ver Lista de Pasajeros)</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {allTrips.map(trip => (
-                <div key={trip.id} onClick={() => fetchManifest(trip)} className="border rounded-xl p-5 cursor-pointer hover:border-cyan-500 hover:shadow-md transition-all bg-gray-50">
-                  <div className="font-bold text-gray-800 text-lg">{trip.origin} ➔ {trip.destination}</div>
-                  <div className="text-sm text-gray-500 mb-3 mt-1 flex items-center gap-2">
-                    <CalendarDays size={14} /> {trip.date} • <Clock size={14} /> {trip.departure_time}
-                  </div>
-                  <div className="flex justify-between items-center pt-3 border-t">
-                     <span className="text-xs bg-gray-200 px-2 py-1 rounded font-semibold text-gray-700">{trip.bus_type}</span>
-                     <span className="text-xs font-bold text-cyan-600 flex items-center gap-1"><Users size={14}/> Ver Pasajeros</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* --- VISTA: TAQUILLA --- */}
         {activeTab === 'taquilla' && (
@@ -979,19 +951,48 @@ export default function AdminDashboard() {
               <form onSubmit={handleSavePrice} className="space-y-4">
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Origen</label><select value={priceForm.origin} onChange={e => setPriceForm({...priceForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Destino</label><select value={priceForm.destination} onChange={e => setPriceForm({...priceForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Precio Normal (Ida) $</label><input type="number" required value={priceForm.price_one_way} onChange={e => setPriceForm({...priceForm, price_one_way: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Precio Ida y Vuelta $</label><input type="number" required value={priceForm.price_round_trip} onChange={e => setPriceForm({...priceForm, price_round_trip: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
+                
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Precio Normal (Ida) $</label>
+                  <input type="number" required value={priceForm.price_one_way} onChange={e => setPriceForm({...priceForm, price_one_way: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Precio Ida y Vuelta $</label>
+                  <input type="number" required value={priceForm.price_round_trip} onChange={e => setPriceForm({...priceForm, price_round_trip: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
+                </div>
+                
+                {/* --- NUEVO CAMPO: PRECIO 15 DÍAS --- */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Precio 15 Días $</label>
+                  <input type="number" required value={priceForm.price_15_days} onChange={e => setPriceForm({...priceForm, price_15_days: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
+                </div>
+
                 <button type="submit" disabled={isSavingPrice} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg text-sm transition-colors">{isSavingPrice ? 'Guardando...' : 'Guardar en Base de Datos'}</button>
               </form>
             </div>
+            
             <div className="bg-white rounded-xl border shadow-sm col-span-2 overflow-hidden">
               <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center"><h2 className="font-bold text-gray-800">Precios Globales Guardados</h2></div>
               <div className="overflow-x-auto max-h-[500px]">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-white text-gray-500 font-medium border-b sticky top-0"><tr><th className="px-4 py-3">Ruta Principal</th><th className="px-4 py-3 text-right">Ida</th><th className="px-4 py-3 text-right">Ida y Vuelta</th></tr></thead>
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-white text-gray-500 font-medium border-b sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3">Ruta Principal</th>
+                      <th className="px-4 py-3 text-right">Ida</th>
+                      <th className="px-4 py-3 text-right">Ida y Vuelta</th>
+                      {/* --- NUEVA COLUMNA: 15 DÍAS --- */}
+                      <th className="px-4 py-3 text-right">15 Días</th>
+                    </tr>
+                  </thead>
                   <tbody className="divide-y text-gray-800">
                     {defaultPrices.map((p: any) => (
-                      <tr key={p.id} className="hover:bg-purple-50 transition-colors"><td className="px-4 py-3 font-medium text-gray-900">{p.origin} ↔ {p.destination}</td><td className="px-4 py-3 text-right text-gray-600">${Number(p.price_one_way).toLocaleString()}</td><td className="px-4 py-3 text-right font-bold text-purple-700">${Number(p.price_round_trip).toLocaleString()}</td></tr>
+                      <tr key={p.id} className="hover:bg-purple-50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-gray-900">{p.origin} ↔ {p.destination}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">${Number(p.price_one_way).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right font-bold text-purple-700">${Number(p.price_round_trip).toLocaleString()}</td>
+                        {/* --- NUEVO DATO EN TABLA: 15 DÍAS --- */}
+                        <td className="px-4 py-3 text-right font-bold text-orange-600">${Number(p.price_15_days || 0).toLocaleString()}</td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
@@ -1096,6 +1097,7 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            {/* Tarjetas de Resumen Dinámico */}
             {activeTab === 'pagados' && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white p-6 rounded-xl border shadow-sm col-span-1 md:col-span-2 flex items-center justify-between">
@@ -1127,11 +1129,13 @@ export default function AdminDashboard() {
                     ) : (
                       Object.keys(datosAgrupados).map((mes: string) => (
                         <React.Fragment key={mes}>
+                          {/* Fila separadora del mes */}
                           <tr className="bg-gray-100">
                             <td colSpan={8} className="px-6 py-2 font-black text-gray-700 uppercase tracking-wider text-xs">
                               {mes} - ({datosAgrupados[mes].length} Registros)
                             </td>
                           </tr>
+                          {/* Filas de datos del mes */}
                           {datosAgrupados[mes].map((item: any) => (
                             <tr key={item.id} className="hover:bg-gray-50">
                               <td className="px-6 py-4 font-mono font-bold text-blue-900">{item.folio}</td>
@@ -1147,15 +1151,12 @@ export default function AdminDashboard() {
                               <td className="px-6 py-4 text-right font-bold text-gray-900">${Number(item.monto).toLocaleString()}</td>
                               
                               <td className="px-6 py-4 text-center flex justify-center gap-2">
-                                
-                                {/* PROTEGIDO: Marcar como pagado (Solo Admin) */}
-                                {userRole === 'admin' && item.status === 'pendiente' && (
+                                {item.status === 'pendiente' && (
                                   <button onClick={() => handleMarkAsPaid(item.id, item.folio)} className="p-2 text-green-600 hover:bg-green-100 rounded-lg cursor-pointer transition-colors" title="Confirmar Pago en Efectivo">
                                     <CheckSquare size={18} />
                                   </button>
                                 )}
                                 
-                                {/* PROTEGIDO: Editar Método de Pago (Solo Admin) */}
                                 {userRole === 'admin' && (
                                   <button 
                                     onClick={() => {
@@ -1178,8 +1179,6 @@ export default function AdminDashboard() {
                                 <button onClick={() => printBoleto(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-purple-600 hover:bg-purple-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title={item.status === 'pagado' ? 'Imprimir Boleto Abordaje (PDF)' : 'Solo pagados'}>
                                   <Ticket size={18} />
                                 </button>
-
-                                {/* PROTEGIDO: Eliminar Venta (Solo Admin) */}
                                 {userRole === 'admin' && (
                                   <button onClick={() => handleDeleteBooking(item.id, item.folio)} className="p-2 text-red-600 hover:bg-red-100 rounded-lg cursor-pointer transition-colors" title="Eliminar Venta Permanentemente">
                                     <Trash2 size={18} />
@@ -1234,93 +1233,6 @@ export default function AdminDashboard() {
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
-        )}
-
-        {/* --- MODAL DE MANIFIESTO (LISTA DE PASAJEROS) --- */}
-        {manifestTrip && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh]">
-              
-              {/* Encabezado del Modal */}
-              <div className="bg-cyan-900 px-6 py-4 flex justify-between items-start text-white shrink-0">
-                <div>
-                  <h3 className="font-bold text-xl flex items-center gap-2"><Users /> Lista de Pasajeros</h3>
-                  <p className="text-sm text-cyan-200 mt-1">
-                    Ruta: <span className="font-bold text-white">{manifestTrip.origin} ➔ {manifestTrip.destination}</span>
-                  </p>
-                  <p className="text-sm text-cyan-200">
-                    Fecha y Hora: {manifestTrip.date} a las {manifestTrip.departure_time}
-                  </p>
-                </div>
-                <button onClick={() => setManifestTrip(null)} className="text-cyan-200 hover:text-white p-1">
-                  <XCircle size={28} />
-                </button>
-              </div>
-              
-              {/* Contenido / Tabla */}
-              <div className="p-6 overflow-y-auto">
-                {loadingManifest ? (
-                  <div className="text-center py-10">
-                    <p className="text-gray-500 font-medium">Cargando lista de pasajeros...</p>
-                  </div>
-                ) : manifestPassengers.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Users size={32} className="text-gray-400" />
-                    </div>
-                    <p className="text-gray-600 font-medium text-lg">Aún no hay boletos vendidos para este viaje.</p>
-                  </div>
-                ) : (
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 text-gray-500 font-medium border-b sticky top-0">
-                      <tr>
-                        <th className="px-4 py-3">Folio/Ref</th>
-                        <th className="px-4 py-3">Nombre del Pasajero</th>
-                        <th className="px-4 py-3 text-center">Asientos</th>
-                        <th className="px-4 py-3 text-center">Estado</th>
-                        <th className="px-4 py-3 text-center">Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y text-gray-800">
-                      {manifestPassengers.map(p => {
-                        const isBoarded = p.status === 'boarded';
-                        return (
-                          <tr key={p.id} className="hover:bg-cyan-50 transition-colors">
-                            <td className="px-4 py-4 font-mono font-bold text-gray-600">{p.booking_ref}</td>
-                            <td className="px-4 py-4 font-bold text-gray-900">{p.passenger_name}</td>
-                            <td className="px-4 py-4 text-center font-bold">{p.seats.join(', ') || 'N/A'}</td>
-                            <td className="px-4 py-4 text-center">
-                              {isBoarded ? (
-                                <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full text-xs font-black">
-                                  ABORDÓ
-                                </span>
-                              ) : (
-                                <span className="bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1 rounded-full text-xs font-black">
-                                  PENDIENTE
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-4 text-center">
-                              {!isBoarded ? (
-                                <button 
-                                  onClick={() => handleManualBoarding(p.id, p.passenger_name)} 
-                                  className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
-                                >
-                                  DAR ACCESO
-                                </button>
-                              ) : (
-                                <span className="text-gray-400 text-xs font-medium">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
             </div>
           </div>
         )}

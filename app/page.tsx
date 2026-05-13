@@ -48,7 +48,7 @@ export default function AdminDashboard() {
   const [manifestPassengers, setManifestPassengers] = useState<any[]>([]);
   const [loadingManifest, setLoadingManifest] = useState(false);
 
-  // --- ESTADOS: CREAR VIAJE (Totalmente simplificado, los precios se sacan del Tarifario) ---
+  // --- ESTADOS: CREAR VIAJE ---
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [tripForm, setTripForm] = useState({ origin: 'Durango', destination: 'Guadalajara', date: '', departure_time: '', arrival_time: '', total_seats: '40', bus_type: 'Primera Clase' });
 
@@ -425,7 +425,7 @@ export default function AdminDashboard() {
     } catch (error: any) { alert("Error: " + error.message); } finally { setIsSavingPrice(false); }
   };
 
-  // --- PROGRAMAR VIAJE (Totalmente limpio, sin precios) ---
+  // --- PROGRAMAR VIAJE ---
   const handleCreateTrip = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsCreatingTrip(true);
@@ -479,8 +479,8 @@ export default function AdminDashboard() {
           <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">Acceso Administrativo</h1>
           <p className="text-center text-gray-500 mb-8">Ingresa tus credenciales para acceder al Panel de Bonilla Tours.</p>
           <form onSubmit={handleLogin} className="space-y-5">
-            <div><label className="block text-sm font-bold text-gray-700 mb-1">Correo Electrónico</label><input type="email" required value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className="w-full border rounded-lg p-3 bg-gray-50 focus:outline-blue-600" placeholder="admin@bonillatours.com" /></div>
-            <div><label className="block text-sm font-bold text-gray-700 mb-1">Contraseña</label><input type="password" required value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className="w-full border rounded-lg p-3 bg-gray-50 focus:outline-blue-600" placeholder="••••••••" /></div>
+            <div><label className="block text-sm font-bold text-gray-700 mb-1">Correo Electrónico</label><input type="email" required value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className="w-full border rounded-lg p-3 bg-white text-gray-900 focus:outline-blue-600" placeholder="admin@bonillatours.com" /></div>
+            <div><label className="block text-sm font-bold text-gray-700 mb-1">Contraseña</label><input type="password" required value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className="w-full border rounded-lg p-3 bg-white text-gray-900 focus:outline-blue-600" placeholder="••••••••" /></div>
             <button type="submit" disabled={isLoggingIn} className="w-full bg-gray-900 hover:bg-black text-white font-bold py-4 rounded-xl transition-colors mt-4">{isLoggingIn ? 'Verificando...' : 'Entrar al Panel'}</button>
           </form>
         </div>
@@ -601,20 +601,20 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Origen (Subida)</label>
-                    <select value={taquillaForm.origin} onChange={e => setTaquillaForm({...taquillaForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white">
+                    <select value={taquillaForm.origin} onChange={e => setTaquillaForm({...taquillaForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">
                       {BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Destino (Bajada)</label>
-                    <select value={taquillaForm.destination} onChange={e => setTaquillaForm({...taquillaForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white">
+                    <select value={taquillaForm.destination} onChange={e => setTaquillaForm({...taquillaForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">
                       {BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Fecha del Viaje</label>
-                  <input type="date" required value={taquillaForm.date} onChange={e => setTaquillaForm({...taquillaForm, date: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
+                  <input type="date" required value={taquillaForm.date} onChange={e => setTaquillaForm({...taquillaForm, date: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" />
                 </div>
                 <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg text-sm transition-colors">Buscar Autobuses</button>
               </form>
@@ -680,21 +680,21 @@ export default function AdminDashboard() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Nombre Pasajero</label>
-                      <input type="text" required value={taquillaPassenger.name} onChange={e => setTaquillaPassenger({...taquillaPassenger, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm" placeholder="Ej. Juan Pérez" />
+                      <input type="text" required value={taquillaPassenger.name} onChange={e => setTaquillaPassenger({...taquillaPassenger, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" placeholder="Ej. Juan Pérez" />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Teléfono (Opcional)</label>
-                      <input type="text" value={taquillaPassenger.phone} onChange={e => setTaquillaPassenger({...taquillaPassenger, phone: e.target.value})} className="w-full border rounded-lg p-2 text-sm" placeholder="10 dígitos" />
+                      <input type="text" value={taquillaPassenger.phone} onChange={e => setTaquillaPassenger({...taquillaPassenger, phone: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" placeholder="10 dígitos" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Precio Unitario ($)</label>
-                      <input type="number" required value={taquillaPassenger.priceOverride} onChange={e => setTaquillaPassenger({...taquillaPassenger, priceOverride: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-bold text-emerald-700" />
+                      <input type="number" required value={taquillaPassenger.priceOverride} onChange={e => setTaquillaPassenger({...taquillaPassenger, priceOverride: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-bold text-emerald-700 bg-white" />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Estado del Boleto</label>
-                      <select value={taquillaPassenger.status} onChange={e => setTaquillaPassenger({...taquillaPassenger, status: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-semibold">
+                      <select value={taquillaPassenger.status} onChange={e => setTaquillaPassenger({...taquillaPassenger, status: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-semibold bg-white text-gray-900">
                         <option value="confirmed">Pagado en Taquilla (Confirmado)</option>
                         <option value="pending">Solo Apartar (Pendiente)</option>
                       </select>
@@ -762,11 +762,11 @@ export default function AdminDashboard() {
               )}
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><Edit3 className="text-purple-600" /> Configurar Ruta</h2>
               <form onSubmit={handleSavePrice} className="space-y-4">
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Sube en (Origen)</label><select value={priceForm.origin} onChange={e => setPriceForm({...priceForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Baja en (Destino)</label><select value={priceForm.destination} onChange={e => setPriceForm({...priceForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Precio Normal (Ida) $</label><input type="number" required value={priceForm.price_one_way} onChange={e => setPriceForm({...priceForm, price_one_way: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Precio Ida y Vuelta $</label><input type="number" required value={priceForm.price_round_trip} onChange={e => setPriceForm({...priceForm, price_round_trip: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Precio 15 Días $</label><input type="number" required value={priceForm.price_15_days} onChange={e => setPriceForm({...priceForm, price_15_days: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Sube en (Origen)</label><select value={priceForm.origin} onChange={e => setPriceForm({...priceForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Baja en (Destino)</label><select value={priceForm.destination} onChange={e => setPriceForm({...priceForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Precio Normal (Ida) $</label><input type="number" required value={priceForm.price_one_way} onChange={e => setPriceForm({...priceForm, price_one_way: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Precio Ida y Vuelta $</label><input type="number" required value={priceForm.price_round_trip} onChange={e => setPriceForm({...priceForm, price_round_trip: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Precio 15 Días $</label><input type="number" required value={priceForm.price_15_days} onChange={e => setPriceForm({...priceForm, price_15_days: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
                 <button type="submit" disabled={isSavingPrice} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg text-sm transition-colors">{isSavingPrice ? 'Guardando...' : 'Guardar en Base de Datos'}</button>
               </form>
             </div>
@@ -794,7 +794,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* --- VISTA: PROGRAMAR VIAJE (Totalmente Limpia, sin el recuadro que confundía) --- */}
+        {/* --- VISTA: PROGRAMAR VIAJE --- */}
         {activeTab === 'crear-viaje' && (
           <div className="bg-white rounded-xl border shadow-sm p-8 max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2"><Bus className="text-blue-600" /> Programar Salida de Autobús</h2>
@@ -803,18 +803,18 @@ export default function AdminDashboard() {
             </p>
             <form onSubmit={handleCreateTrip} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Sale desde</label><select value={tripForm.origin} onChange={e => setTripForm({...tripForm, origin: e.target.value})} className="w-full border rounded-lg p-2 bg-white">{BONILLA_ROUTE.map(city => <option key={city} value={city}>{city}</option>)}</select></div>
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Llega hasta</label><select value={tripForm.destination} onChange={(e) => setTripForm({...tripForm, destination: e.target.value})} className="w-full border rounded-lg p-2 bg-white">{BONILLA_ROUTE.map(city => <option key={city} value={city}>{city}</option>)}</select></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Sale desde</label><select value={tripForm.origin} onChange={e => setTripForm({...tripForm, origin: e.target.value})} className="w-full border rounded-lg p-2 bg-white text-gray-900">{BONILLA_ROUTE.map(city => <option key={city} value={city}>{city}</option>)}</select></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Llega hasta</label><select value={tripForm.destination} onChange={(e) => setTripForm({...tripForm, destination: e.target.value})} className="w-full border rounded-lg p-2 bg-white text-gray-900">{BONILLA_ROUTE.map(city => <option key={city} value={city}>{city}</option>)}</select></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Fecha de Salida</label><input type="date" required value={tripForm.date} onChange={(e) => setTripForm({...tripForm, date: e.target.value})} className="w-full border rounded-lg p-2" /></div>
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Hora de Salida</label><input type="time" required value={tripForm.departure_time} onChange={(e) => setTripForm({...tripForm, departure_time: e.target.value})} className="w-full border rounded-lg p-2" /></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Fecha de Salida</label><input type="date" required value={tripForm.date} onChange={(e) => setTripForm({...tripForm, date: e.target.value})} className="w-full border rounded-lg p-2 bg-white text-gray-900" /></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Hora de Salida</label><input type="time" required value={tripForm.departure_time} onChange={(e) => setTripForm({...tripForm, departure_time: e.target.value})} className="w-full border rounded-lg p-2 bg-white text-gray-900" /></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Nº Asientos del Camión</label><input type="number" required value={tripForm.total_seats} onChange={(e) => setTripForm({...tripForm, total_seats: e.target.value})} className="w-full border rounded-lg p-2" /></div>
-                <div><label className="block text-sm font-bold text-gray-700 mb-1">Tipo de Autobús</label><input type="text" value={tripForm.bus_type} onChange={(e) => setTripForm({...tripForm, bus_type: e.target.value})} placeholder="Ej. Primera Clase" className="w-full border rounded-lg p-2" /></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Nº Asientos del Camión</label><input type="number" required value={tripForm.total_seats} onChange={(e) => setTripForm({...tripForm, total_seats: e.target.value})} className="w-full border rounded-lg p-2 bg-white text-gray-900" /></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-1">Tipo de Autobús</label><input type="text" value={tripForm.bus_type} onChange={(e) => setTripForm({...tripForm, bus_type: e.target.value})} placeholder="Ej. Primera Clase" className="w-full border rounded-lg p-2 bg-white text-gray-900" /></div>
               </div>
-              <div><label className="block text-sm font-bold text-gray-700 mb-1">Hora Llegada Aprox. (Destino Final)</label><input type="time" required value={tripForm.arrival_time} onChange={(e) => setTripForm({...tripForm, arrival_time: e.target.value})} className="w-full border rounded-lg p-2" /></div>
+              <div><label className="block text-sm font-bold text-gray-700 mb-1">Hora Llegada Aprox. (Destino Final)</label><input type="time" required value={tripForm.arrival_time} onChange={(e) => setTripForm({...tripForm, arrival_time: e.target.value})} className="w-full border rounded-lg p-2 bg-white text-gray-900" /></div>
               
               <button type="submit" disabled={isCreatingTrip} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors flex justify-center items-center gap-2">
                 {isCreatingTrip ? 'Guardando Viaje...' : <><CheckCircle size={20}/> Publicar Viaje</>}
@@ -829,13 +829,13 @@ export default function AdminDashboard() {
             <div className="bg-white rounded-xl border shadow-sm p-6 col-span-1 h-fit">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><Box className="text-orange-600" /> Registrar Paquete</h2>
               <form onSubmit={handleCreateParcel} className="space-y-4">
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Remitente</label><input type="text" required value={parcelForm.sender} onChange={e => setParcelForm({...parcelForm, sender: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Destinatario</label><input type="text" required value={parcelForm.receiver} onChange={e => setParcelForm({...parcelForm, receiver: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Remitente</label><input type="text" required value={parcelForm.sender} onChange={e => setParcelForm({...parcelForm, sender: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Destinatario</label><input type="text" required value={parcelForm.receiver} onChange={e => setParcelForm({...parcelForm, receiver: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
                 <div className="flex gap-2">
-                  <div className="flex-1"><label className="block text-xs font-bold text-gray-700 mb-1">Origen</label><select value={parcelForm.origin} onChange={e => setParcelForm({...parcelForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                  <div className="flex-1"><label className="block text-xs font-bold text-gray-700 mb-1">Destino</label><select value={parcelForm.destination} onChange={e => setParcelForm({...parcelForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div className="flex-1"><label className="block text-xs font-bold text-gray-700 mb-1">Origen</label><select value={parcelForm.origin} onChange={e => setParcelForm({...parcelForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div className="flex-1"><label className="block text-xs font-bold text-gray-700 mb-1">Destino</label><select value={parcelForm.destination} onChange={e => setParcelForm({...parcelForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                 </div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Costo ($)</label><input type="number" required value={parcelForm.price} onChange={e => setParcelForm({...parcelForm, price: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-bold text-orange-600" /></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Costo ($)</label><input type="number" required value={parcelForm.price} onChange={e => setParcelForm({...parcelForm, price: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-bold text-orange-600 bg-white" /></div>
                 <button type="submit" disabled={isCreatingParcel} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg text-sm mt-2 transition-colors">{isCreatingParcel ? 'Guardando...' : 'Generar Folio'}</button>
               </form>
             </div>
@@ -860,8 +860,8 @@ export default function AdminDashboard() {
           <>
             <div className="bg-white p-4 rounded-xl border shadow-sm mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex gap-4 items-center">
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="border rounded-lg px-3 py-2 text-sm text-gray-700" />
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="border rounded-lg px-3 py-2 text-sm text-gray-700" />
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="border rounded-lg px-3 py-2 text-sm text-gray-900 bg-white" />
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="border rounded-lg px-3 py-2 text-sm text-gray-900 bg-white" />
                 <button onClick={() => { setStartDate(''); setEndDate(''); }} className="text-sm text-blue-600 font-bold underline">Ver Todo</button>
               </div>
               <div className="flex gap-2">
@@ -940,7 +940,7 @@ export default function AdminDashboard() {
                 <p className="text-sm text-gray-600">Modificando el método de pago para el folio <strong className="text-gray-900">{editingPayment.folio}</strong></p>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Nuevo Método</label>
-                  <select value={editingPayment.method} onChange={e => setEditingPayment({...editingPayment, method: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-semibold text-gray-800">
+                  <select value={editingPayment.method} onChange={e => setEditingPayment({...editingPayment, method: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-semibold text-gray-900 bg-white">
                     <option value="efectivo">Efectivo</option>
                     <option value="tarjeta">Tarjeta</option>
                     <option value="transferencia">Transferencia</option>
@@ -966,20 +966,20 @@ export default function AdminDashboard() {
               </div>
               <form onSubmit={handleSaveHistoricalBooking} className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Fecha de la Venta</label><input type="date" required value={historyForm.saleDate} onChange={e => setHistoryForm({...historyForm, saleDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Fecha del Viaje</label><input type="date" required value={historyForm.tripDate} onChange={e => setHistoryForm({...historyForm, tripDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm" /></div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Fecha de la Venta</label><input type="date" required value={historyForm.saleDate} onChange={e => setHistoryForm({...historyForm, saleDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Fecha del Viaje</label><input type="date" required value={historyForm.tripDate} onChange={e => setHistoryForm({...historyForm, tripDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Origen</label><select value={historyForm.origin} onChange={e => setHistoryForm({...historyForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Destino</label><select value={historyForm.destination} onChange={e => setHistoryForm({...historyForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Origen</label><select value={historyForm.origin} onChange={e => setHistoryForm({...historyForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Destino</label><select value={historyForm.destination} onChange={e => setHistoryForm({...historyForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="col-span-2"><label className="block text-xs font-bold text-gray-700 mb-1">Nombre del Pasajero</label><input type="text" required value={historyForm.name} onChange={e => setHistoryForm({...historyForm, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm" placeholder="Ej. María López" /></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Tipo de Boleto</label><select value={historyForm.tripType} onChange={e => setHistoryForm({...historyForm, tripType: e.target.value})} className="w-full border rounded-lg p-2 text-sm"><option value="sencillo">Sencillo</option><option value="redondo">Redondo</option><option value="15_dias">15 Días</option></select></div>
+                  <div className="col-span-2"><label className="block text-xs font-bold text-gray-700 mb-1">Nombre del Pasajero</label><input type="text" required value={historyForm.name} onChange={e => setHistoryForm({...historyForm, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" placeholder="Ej. María López" /></div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Tipo de Boleto</label><select value={historyForm.tripType} onChange={e => setHistoryForm({...historyForm, tripType: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900"><option value="sencillo">Sencillo</option><option value="redondo">Redondo</option><option value="15_dias">15 Días</option></select></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Total Pagado ($)</label><input type="number" required value={historyForm.price} onChange={e => setHistoryForm({...historyForm, price: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-bold text-green-700" placeholder="Ej. 850" /></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Asientos (Opcional)</label><input type="text" value={historyForm.seats} onChange={e => setHistoryForm({...historyForm, seats: e.target.value})} className="w-full border rounded-lg p-2 text-sm" placeholder="Ej. 12, 13" /></div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Total Pagado ($)</label><input type="number" required value={historyForm.price} onChange={e => setHistoryForm({...historyForm, price: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-bold text-green-700 bg-white" placeholder="Ej. 850" /></div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Asientos (Opcional)</label><input type="text" value={historyForm.seats} onChange={e => setHistoryForm({...historyForm, seats: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" placeholder="Ej. 12, 13" /></div>
                 </div>
                 <div className="pt-4 flex gap-3 border-t mt-6">
                   <button type="button" onClick={() => setShowHistoryModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">Cancelar</button>

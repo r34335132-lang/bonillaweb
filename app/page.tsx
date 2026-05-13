@@ -182,6 +182,7 @@ export default function AdminDashboard() {
           if (metodoPagoUI.includes('card') || metodoPagoUI === 'tarjeta') metodoPagoUI = 'Tarjeta';
           else if (metodoPagoUI.includes('cash') || metodoPagoUI === 'efectivo') metodoPagoUI = 'Efectivo';
           else if (metodoPagoUI === 'transferencia') metodoPagoUI = 'Transferencia';
+          else if (metodoPagoUI === 'pendiente de pago' || metodoPagoUI === 'pendiente') metodoPagoUI = 'Pendiente de Pago';
 
           let tipoViaje = 'Viaje Sencillo';
           if (b.is_15_days) tipoViaje = 'Paquete 15 Días';
@@ -228,7 +229,7 @@ export default function AdminDashboard() {
       await logAction('BORRAR_VENTA', `Eliminó la venta con folio ${folio} del sistema.`);
       alert(`Venta ${folio} eliminada correctamente.`);
       fetchRealData(); 
-    } catch (error: any) { alert("Error al eliminar la venta: " + error.message); }
+    } catch (error: any) { alert("Error al eliminar la venta. Revisa las políticas RLS en Supabase: " + error.message); }
   };
 
   const handleUpdatePaymentMethod = async (e: React.FormEvent) => {
@@ -907,7 +908,7 @@ export default function AdminDashboard() {
                                   <button onClick={() => handleMarkAsPaid(item.id, item.folio)} className="p-2 text-green-600 hover:bg-green-100 rounded-lg cursor-pointer transition-colors" title="Confirmar Pago en Efectivo"><CheckSquare size={18} /></button>
                                 )}
                                 {userRole === 'admin' && (
-                                  <button onClick={() => { let currentMethod = 'efectivo'; if (item.metodoPago === 'Tarjeta') currentMethod = 'tarjeta'; if (item.metodoPago === 'Transferencia') currentMethod = 'transferencia'; setEditingPayment({ id: item.id, folio: item.folio, method: currentMethod }); setShowEditPaymentModal(true); }} className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-lg cursor-pointer transition-colors" title="Editar Método de Pago"><CreditCard size={18} /></button>
+                                  <button onClick={() => { let currentMethod = 'efectivo'; if (item.metodoPago === 'Tarjeta') currentMethod = 'tarjeta'; if (item.metodoPago === 'Transferencia') currentMethod = 'transferencia'; if (item.metodoPago === 'Pendiente de Pago') currentMethod = 'pendiente de pago'; setEditingPayment({ id: item.id, folio: item.folio, method: currentMethod }); setShowEditPaymentModal(true); }} className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-lg cursor-pointer transition-colors" title="Editar Método de Pago"><CreditCard size={18} /></button>
                                 )}
                                 <button onClick={() => printTicket(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-blue-600 hover:bg-blue-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title="Imprimir Ticket"><Printer size={18} /></button>
                                 <button onClick={() => printBoleto(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-purple-600 hover:bg-purple-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title="Imprimir Boleto Abordaje"><Ticket size={18} /></button>
@@ -943,6 +944,7 @@ export default function AdminDashboard() {
                     <option value="efectivo">Efectivo</option>
                     <option value="tarjeta">Tarjeta</option>
                     <option value="transferencia">Transferencia</option>
+                    <option value="pendiente de pago">Pendiente de Pago</option>
                   </select>
                 </div>
                 <div className="pt-4 flex gap-3 border-t mt-6">

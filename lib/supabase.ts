@@ -8,7 +8,7 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Función para actualizar el método de pago de una reserva existente
-export const updateBookingPayment = async (bookingId: string, method: 'tarjeta' | 'transferencia' | 'efectivo') => {
+export const updateBookingPayment = async (bookingId: string, method: 'tarjeta' | 'transferencia' | 'efectivo' | 'pendiente de pago') => {
   const { data, error } = await supabase
     .from('bookings')
     .update({ payment_method: method })

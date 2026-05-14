@@ -61,6 +61,7 @@ export default function AdminDashboard() {
   // --- ESTADOS: TAQUILLA ---
   const [taquillaSaleDate, setTaquillaSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [taquillaForm, setTaquillaForm] = useState({ origin: 'Durango', destination: 'Guadalajara', date: '' });
+  const [taquillaReturnDate, setTaquillaReturnDate] = useState(''); // NUEVO: Estado para fecha de regreso
   const [taquillaTrips, setTaquillaTrips] = useState<any[]>([]);
   const [taquillaSelectedTrip, setTaquillaSelectedTrip] = useState<any>(null);
   const [taquillaOccupiedSeats, setTaquillaOccupiedSeats] = useState<number[]>([]);
@@ -74,6 +75,7 @@ export default function AdminDashboard() {
   const [historyForm, setHistoryForm] = useState({
     saleDate: new Date().toISOString().split('T')[0],
     tripDate: new Date().toISOString().split('T')[0],
+    returnDate: '', // NUEVO: Estado para histórico
     origin: 'Durango',
     destination: 'Zacatecas',
     name: '',
@@ -290,8 +292,8 @@ export default function AdminDashboard() {
       const isGoingSouth = oIdx < dIdx;
       
       const valid = data.filter((t: any) => {
-        const tStart = BONILLA_ROUTE.indexOf(t.origin);
-        const tEnd = BONILLA_ROUTE.indexOf(t.destination);
+        const tStart = BONILLA_ROUTE.indexOf(t.origin?.trim());
+        const tEnd = BONILLA_ROUTE.indexOf(t.destination?.trim());
         if (tStart === -1 || tEnd === -1) return false;
         
         const tripGoesSouth = tStart < tEnd;
@@ -315,8 +317,8 @@ export default function AdminDashboard() {
       const isGoingSouth = oIdx < dIdx;
       
       bData.forEach((b: any) => {
-        const bStart = BONILLA_ROUTE.indexOf(b.origin);
-        const bEnd = BONILLA_ROUTE.indexOf(b.destination);
+        const bStart = BONILLA_ROUTE.indexOf(b.origin?.trim());
+        const bEnd = BONILLA_ROUTE.indexOf(b.destination?.trim());
         if (bStart === -1 || bEnd === -1) return;
 
         const bookingGoingSouth = bStart < bEnd;
@@ -373,25 +375,125 @@ export default function AdminDashboard() {
     }
   };
 
+  // --- NUEVA LÓGICA DE VENTA RÁPIDA (CON BOLETO DE REGRESO DUPLICADO) ---
   const handleSellTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     if (taquillaSelectedSeats.length === 0) return alert("Selecciona al menos un asiento.");
     if (!taquillaPassenger.name.trim()) return alert("Ingresa el nombre del pasajero.");
+    
+    const isRound = taquillaPassenger.tripType === 'redondo';
+    const is15 = taquillaPassenger.tripType === '15_dias';
+
+    // Verificamos que llenen la fecha de regreso
+    if ((isRound || is15) && !taquillaReturnDate) {
+      return alert("Por favor selecciona una fecha de regreso para este tipo de viaje.");
+    }
     
     setIsSelling(true);
     try {
       const bookingRef = "BT-" + Math.floor(100000 + Math.random() * 900000).toString().slice(0, 6);
       const unitPrice = Number(taquillaPassenger.priceOverride) || 0;
       
-      const { error } = await supabase.from('bookings').insert({
-        booking_ref: bookingRef, trip_id: taquillaSelectedTrip.id, passenger_name: taquillaPassenger.name, passenger_email: 'taquilla@bonillatours.com', passenger_phone: taquillaPassenger.phone || '0000000000', payment_method: 'cash', status: taquillaPassenger.status, is_guest: true, total_price: unitPrice * taquillaSelectedSeats.length, origin: taquillaForm.origin, destination: taquillaForm.destination, seats: taquillaSelectedSeats, is_round_trip: taquillaPassenger.tripType === 'redondo', is_15_days: taquillaPassenger.tripType === '15_dias', created_at: new Date(`${taquillaSaleDate}T12:00:00Z`).toISOString()
-      });
+      // 1. Insertamos Boleto de Ida
+      const { data: newBooking, error } = await supabase.from('bookings').insert({
+        booking_ref: bookingRef, 
+        trip_id: taquillaSelectedTrip.id, 
+        passenger_name: taquillaPassenger.name, 
+        passenger_email: 'taquilla@bonillatours.com', 
+        passenger_phone: taquillaPassenger.phone || '0000000000', 
+        payment_method: 'cash', 
+        status: taquillaPassenger.status, 
+        is_guest: true, 
+        total_price: unitPrice * taquillaSelectedSeats.length, 
+        origin: taquillaForm.origin, 
+        destination: taquillaForm.destination, 
+        seats: taquillaSelectedSeats, 
+        is_round_trip: isRound, 
+        is_15_days: is15, 
+        created_at: new Date(`${taquillaSaleDate}T12:00:00Z`).toISOString()
+      }).select().single();
 
       if (error) throw error;
+
+      let returnTripId = null;
+
+      // 2. Lógica para el BOLETO DUPLICADO DE REGRESO
+      if ((isRound || is15) && taquillaReturnDate) {
+        
+        // A. Buscar si ya existe el viaje de regreso
+        const { data: existingTrips } = await supabase
+          .from('trips')
+          .select('*')
+          .eq('date', taquillaReturnDate)
+          .eq('origin', taquillaForm.destination.trim())
+          .eq('destination', taquillaForm.origin.trim())
+          .limit(1);
+
+        if (existingTrips && existingTrips.length > 0) {
+          returnTripId = existingTrips[0].id;
+        } else {
+          // B. Si el viaje no existe, creamos el viaje (TRUCO: Sumamos 2 horas a la BD)
+          const { data: newTrip, error: tripError } = await supabase
+            .from('trips')
+            .insert({
+              origin: taquillaForm.destination.trim(),
+              destination: taquillaForm.origin.trim(),
+              date: taquillaReturnDate,
+              departure_time: '22:00', // Mandamos las 22:00 (10 PM) para que se guarde a las 8 PM
+              arrival_time: '08:00',   // Mandamos las 08:00 (8 AM) para que se guarde a las 6 AM
+              price: taquillaSelectedTrip.price || 0,
+              available_seats: taquillaSelectedTrip.total_seats || 40,
+              total_seats: taquillaSelectedTrip.total_seats || 40,
+              bus_type: taquillaSelectedTrip.bus_type || "Estándar",
+              amenities: taquillaSelectedTrip.amenities || []
+            })
+            .select()
+            .single();
+
+          if (!tripError && newTrip) {
+            returnTripId = newTrip.id;
+          }
+        }
+
+        // C. Duplicar el boleto a costo $0 con la ruta inversa
+        if (returnTripId) {
+          const returnBookingRef = "BT-R" + Math.floor(100000 + Math.random() * 900000).toString().slice(0, 5);
+          
+          await supabase
+            .from('bookings')
+            .insert({
+              booking_ref: returnBookingRef,
+              trip_id: returnTripId,
+              user_id: null,
+              seats: taquillaSelectedSeats,
+              passenger_name: taquillaPassenger.name,
+              passenger_email: 'taquilla@bonillatours.com',
+              passenger_phone: taquillaPassenger.phone || '0000000000',
+              payment_method: 'cash',
+              status: taquillaPassenger.status, 
+              is_guest: true,
+              total_price: 0, // <-- Boleto en $0
+              origin: taquillaForm.destination.trim(),
+              destination: taquillaForm.origin.trim(),
+              is_round_trip: isRound,
+              is_15_days: is15,
+              created_at: new Date(`${taquillaSaleDate}T12:00:00Z`).toISOString()
+            });
+        }
+      }
+
+      // 3. Ligar el boleto de regreso al boleto original
+      if (returnTripId) {
+        await supabase.from('bookings').update({ 
+          return_trip_id: returnTripId 
+        }).eq('id', newBooking.id);
+      }
+
       await logAction('CREAR_BOLETO', `Emitió boleto ${bookingRef} en taquilla para ${taquillaPassenger.name}`);
       
       alert(`¡Venta Exitosa! Folio: ${bookingRef}`);
       setTaquillaSelectedTrip(null);
+      setTaquillaReturnDate(''); // Limpiamos la fecha
       fetchRealData();
     } catch (err: any) { alert("Error: " + err.message); } finally { setIsSelling(false); }
   };
@@ -534,11 +636,16 @@ export default function AdminDashboard() {
     printWindow.document.write(html); printWindow.document.close();
   };
 
+  // --- NUEVO: QR con la URL de bonillawww.vercel.app ---
   const printBoleto = (item: any) => {
     if (item.status !== 'pagado') { alert("Solo se pueden generar boletos de compras pagadas."); return; }
     const printWindow = window.open('', '', 'width=300,height=600');
     if (!printWindow) return;
-    const html = `<!DOCTYPE html><html><head><title>Boleto ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .boleto { width: 58mm; padding: 2mm 2mm; box-sizing: border-box; } .text-center { text-align: center; } .text-bold { font-weight: bold; } .logo { max-width: 40mm; margin: 0 auto 5px; display: block; } .divider { border-bottom: 1px dashed #000; margin: 6px 0; } .item { margin-bottom: 4px; } .label { font-size: 9px; font-weight: bold; display: block; } .value { font-size: 11px; display: block; margin-left: 2px; word-break: break-word; } .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; } .dest-label { font-size: 9px; font-weight: bold; margin-bottom: 2px; } .dest-value { font-size: 13px; font-weight: bold; text-transform: uppercase; } .qr-container { text-align: center; margin: 8px 0; } .qr-code { width: 35mm; height: 35mm; margin: 0 auto; display: block; } .terms { font-size: 8px; text-align: left; margin-top: 8px; line-height: 1.1; } .terms h4 { font-size: 9px; text-align: center; margin: 0 0 4px 0; border-bottom: 1px solid #000; padding-bottom: 2px; } .terms p { margin: 2px 0; }</style></head><body><div class="boleto"><img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" /><div class="text-center text-bold" style="font-size: 12px;">BOLETO DE VIAJE</div><div class="divider"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="dest-box"><div class="dest-label">RUTA</div><div class="dest-value">${item.origen} ➔ ${item.destino}</div></div><div class="item"><span class="label">Fecha y Hora:</span> <span class="value">${item.fechaViaje} - ${item.horaViaje}</span></div><div class="item"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span></div><div class="item"><span class="label">Total Pagado:</span> <span class="value text-bold">$${Number(item.monto).toFixed(2)} MXN</span></div><div class="divider"></div><div class="qr-container"><img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${item.folio}" alt="QR" /><div class="label" style="margin-top:4px;">Folio de Reserva</div><div class="text-bold" style="font-size: 13px;">${item.folio}</div><div style="font-size: 8px; margin-top: 4px;">Emitido: ${item.fechaCompleta}</div></div><div class="divider"></div><div class="terms"><h4>TÉRMINOS Y CONDICIONES</h4><p>- Preséntese 20 min antes de su viaje.</p><p>- Muestre el QR o este ticket impreso para abordar.</p><p>- Tolerancia máx de 5 min en espera.</p><p>- Puntos de ascenso/descenso sujetos a cambios.</p><p>- Cancelaciones: 10% de cargo, mín. 1 hr en oficina.</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
+    
+    // Convertimos el ID de reserva en la URL completa para el código QR
+    const qrUrl = encodeURIComponent(`https://bonillawww.vercel.app/?folio=${item.id}`);
+
+    const html = `<!DOCTYPE html><html><head><title>Boleto ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .boleto { width: 58mm; padding: 2mm 2mm; box-sizing: border-box; } .text-center { text-align: center; } .text-bold { font-weight: bold; } .logo { max-width: 40mm; margin: 0 auto 5px; display: block; } .divider { border-bottom: 1px dashed #000; margin: 6px 0; } .item { margin-bottom: 4px; } .label { font-size: 9px; font-weight: bold; display: block; } .value { font-size: 11px; display: block; margin-left: 2px; word-break: break-word; } .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; } .dest-label { font-size: 9px; font-weight: bold; margin-bottom: 2px; } .dest-value { font-size: 13px; font-weight: bold; text-transform: uppercase; } .qr-container { text-align: center; margin: 8px 0; } .qr-code { width: 35mm; height: 35mm; margin: 0 auto; display: block; } .terms { font-size: 8px; text-align: left; margin-top: 8px; line-height: 1.1; } .terms h4 { font-size: 9px; text-align: center; margin: 0 0 4px 0; border-bottom: 1px solid #000; padding-bottom: 2px; } .terms p { margin: 2px 0; }</style></head><body><div class="boleto"><img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" /><div class="text-center text-bold" style="font-size: 12px;">BOLETO DE VIAJE</div><div class="divider"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="dest-box"><div class="dest-label">RUTA</div><div class="dest-value">${item.origen} ➔ ${item.destino}</div></div><div class="item"><span class="label">Fecha y Hora:</span> <span class="value">${item.fechaViaje} - ${item.horaViaje}</span></div><div class="item"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span></div><div class="item"><span class="label">Total Pagado:</span> <span class="value text-bold">$${Number(item.monto).toFixed(2)} MXN</span></div><div class="divider"></div><div class="qr-container"><img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}" alt="QR" /><div class="label" style="margin-top:4px;">Folio de Reserva</div><div class="text-bold" style="font-size: 13px;">${item.folio}</div><div style="font-size: 8px; margin-top: 4px;">Emitido: ${item.fechaCompleta}</div></div><div class="divider"></div><div class="terms"><h4>TÉRMINOS Y CONDICIONES</h4><p>- Preséntese 20 min antes de su viaje.</p><p>- Muestre el QR o este ticket impreso para abordar.</p><p>- Tolerancia máx de 5 min en espera.</p><p>- Puntos de ascenso/descenso sujetos a cambios.</p><p>- Cancelaciones: 10% de cargo, mín. 1 hr en oficina.</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
     printWindow.document.write(html); printWindow.document.close();
   };
 
@@ -675,6 +782,15 @@ export default function AdminDashboard() {
                       <option value="redondo">Viaje Redondo (Ida y Vuelta)</option>
                       <option value="15_dias">Paquete 15 Días (Regreso Abierto)</option>
                     </select>
+
+                    {/* NUEVO: Campo de Fecha de Regreso solo si no es sencillo */}
+                    {(taquillaPassenger.tripType === 'redondo' || taquillaPassenger.tripType === '15_dias') && (
+                      <div className="mt-3 border-t border-gray-200 pt-3">
+                        <label className="block text-xs font-bold text-gray-700 mb-1">Fecha de Regreso</label>
+                        <input type="date" required value={taquillaReturnDate} onChange={e => setTaquillaReturnDate(e.target.value)} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900 border-emerald-300" />
+                        <p className="text-[10px] text-emerald-700 mt-1">Se generará automáticamente el boleto de regreso.</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -967,7 +1083,7 @@ export default function AdminDashboard() {
               <form onSubmit={handleSaveHistoricalBooking} className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div><label className="block text-xs font-bold text-gray-700 mb-1">Fecha de la Venta</label><input type="date" required value={historyForm.saleDate} onChange={e => setHistoryForm({...historyForm, saleDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Fecha del Viaje</label><input type="date" required value={historyForm.tripDate} onChange={e => setHistoryForm({...historyForm, tripDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Fecha del Viaje (Ida)</label><input type="date" required value={historyForm.tripDate} onChange={e => setHistoryForm({...historyForm, tripDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div><label className="block text-xs font-bold text-gray-700 mb-1">Origen</label><select value={historyForm.origin} onChange={e => setHistoryForm({...historyForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>

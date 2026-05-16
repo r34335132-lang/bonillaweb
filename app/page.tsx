@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase'; 
-import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare, History, Trash2, Map, Users, RefreshCw } from 'lucide-react';
+import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare, History, Trash2, Map, Users } from 'lucide-react';
 
 type TabType = 'pagados' | 'intentos' | 'viajes' | 'taquilla' | 'crear-viaje' | 'paqueteria' | 'tarifario' | 'movimientos';
 
@@ -61,8 +61,7 @@ export default function AdminDashboard() {
   // --- ESTADOS: TAQUILLA ---
   const [taquillaSaleDate, setTaquillaSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [taquillaForm, setTaquillaForm] = useState({ origin: 'Durango', destination: 'Guadalajara', date: '' });
-  const [taquillaReturnDate, setTaquillaReturnDate] = useState(''); 
-  const [taquillaOpenReturn, setTaquillaOpenReturn] = useState(false); // ESTADO PARA FECHA ABIERTA
+  const [taquillaReturnDate, setTaquillaReturnDate] = useState('');
   const [taquillaTrips, setTaquillaTrips] = useState<any[]>([]);
   const [taquillaSelectedTrip, setTaquillaSelectedTrip] = useState<any>(null);
   const [taquillaOccupiedSeats, setTaquillaOccupiedSeats] = useState<number[]>([]);
@@ -89,11 +88,6 @@ export default function AdminDashboard() {
   const [showEditPaymentModal, setShowEditPaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState({ id: '', folio: '', method: 'efectivo' });
   const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
-
-  // --- ESTADOS: EDICIÓN DE TIPO DE BOLETO ---
-  const [showEditTypeModal, setShowEditTypeModal] = useState(false);
-  const [editingTicketType, setEditingTicketType] = useState({ id: '', folio: '', tipoActual: 'sencillo', nuevoTipo: 'sencillo' });
-  const [isUpdatingType, setIsUpdatingType] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -169,10 +163,9 @@ export default function AdminDashboard() {
   const fetchRealData = async () => {
     setLoading(true);
     try {
-      // SE AGREGÓ passenger_phone A LA CONSULTA PARA MOSTRARLO EN TABLAS
       const { data: bookingsData } = await supabase
         .from('bookings')
-        .select('id, booking_ref, folio, status, created_at, total_price, passenger_name, passenger_phone, is_round_trip, is_15_days, payment_method, origin, destination, seats, trip:trips!bookings_trip_id_fkey(date, departure_time)')
+        .select('id, booking_ref, folio, status, created_at, total_price, passenger_name, is_round_trip, is_15_days, payment_method, origin, destination, seats, trip:trips!bookings_trip_id_fkey(date, departure_time)')
         .order('created_at', { ascending: false })
         .limit(1500);
 
@@ -197,14 +190,24 @@ export default function AdminDashboard() {
           if (b.is_15_days) tipoViaje = 'Paquete 15 Días';
           else if (b.is_round_trip) tipoViaje = 'Viaje Redondo';
 
+          // Obtenemos de forma segura la info del viaje
+          const tripInfo = Array.isArray(b.trip) ? b.trip[0] : b.trip;
+
           return {
-            id: b.id, folio: b.booking_ref || `FOLIO-${b.folio}`, tipo: tipoViaje, 
-            cliente: b.passenger_name || 'Sin nombre', telefono: b.passenger_phone || 'N/A', monto: b.total_price || 0, status: estadoUI,
-            metodoPago: metodoPagoUI, fechaCompleta: fechaBD.toLocaleString(), dateOnly: dateOnly,
-            origen: b.origin || 'N/A', destino: b.destination || 'N/A',
+            id: b.id, 
+            folio: b.booking_ref || `FOLIO-${b.folio}`, 
+            tipo: tipoViaje, 
+            cliente: b.passenger_name || 'Sin nombre', 
+            monto: b.total_price || 0, 
+            status: estadoUI,
+            metodoPago: metodoPagoUI, 
+            fechaCompra: fechaBD.toLocaleString(), // Cuando lo compró
+            dateOnly: dateOnly, // Para los filtros
+            origen: b.origin || 'N/A', 
+            destino: b.destination || 'N/A',
             asientos: b.seats || [],
-            fechaViaje: b.trip?.date || 'Fecha por definir',
-            horaViaje: b.trip?.departure_time || 'Hora por definir'
+            fechaViaje: tripInfo?.date || 'Fecha por definir', // CUÁNDO ABORDA
+            horaViaje: tripInfo?.departure_time || 'Hora por definir' // A QUÉ HORA ABORDA
           };
         });
         setData(formateados);
@@ -221,7 +224,7 @@ export default function AdminDashboard() {
     if (userRole !== 'admin') return alert("Solo los administradores pueden confirmar pagos.");
     if (!window.confirm(`¿Confirmar pago en efectivo para el boleto ${folio}?`)) return;
     try {
-      const { error } = await supabase.from('bookings').update({ status: 'confirmed', payment_method: 'cash' }).eq('id', bookingId);
+      const { error } = await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', bookingId);
       if (error) throw error;
       await logAction('EDITAR_PAGO', `Confirmó pago en efectivo para el folio ${folio}`);
       alert("¡Boleto marcado como pagado!");
@@ -253,27 +256,6 @@ export default function AdminDashboard() {
       setShowEditPaymentModal(false);
       fetchRealData();
     } catch (error: any) { alert("Error al actualizar método de pago: " + error.message); } finally { setIsUpdatingPayment(false); }
-  };
-
-  const handleUpdateTicketType = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (userRole !== 'admin' && userRole !== 'supervisor') return alert("No tienes permisos para editar este boleto.");
-    setIsUpdatingType(true);
-    try {
-      const isRound = editingTicketType.nuevoTipo === 'redondo';
-      const is15 = editingTicketType.nuevoTipo === '15_dias';
-
-      const { error } = await supabase.from('bookings').update({
-        is_round_trip: isRound,
-        is_15_days: is15
-      }).eq('id', editingTicketType.id);
-
-      if (error) throw error;
-      await logAction('EDITAR_TIPO_VIAJE', `Cambió el tipo de boleto del folio ${editingTicketType.folio} a ${editingTicketType.nuevoTipo}`);
-      alert("Tipo de boleto actualizado exitosamente.");
-      setShowEditTypeModal(false);
-      fetchRealData();
-    } catch (error: any) { alert("Error al actualizar tipo de boleto: " + error.message); } finally { setIsUpdatingType(false); }
   };
 
   const handleSaveHistoricalBooking = async (e: React.FormEvent) => {
@@ -411,9 +393,8 @@ export default function AdminDashboard() {
     const isRound = taquillaPassenger.tripType === 'redondo';
     const is15 = taquillaPassenger.tripType === '15_dias';
 
-    // Validación: Si NO es fecha abierta, exigimos que seleccione fecha
-    if ((isRound || is15) && !taquillaOpenReturn && !taquillaReturnDate) {
-      return alert("Por favor selecciona una fecha de regreso, o marca la casilla de 'Dejar fecha de regreso abierta'.");
+    if ((isRound || is15) && !taquillaReturnDate) {
+      return alert("Por favor selecciona una fecha de regreso para este tipo de viaje.");
     }
     
     setIsSelling(true);
@@ -421,16 +402,13 @@ export default function AdminDashboard() {
       const bookingRef = "BT-" + Math.floor(100000 + Math.random() * 900000).toString().slice(0, 6);
       const unitPrice = Number(taquillaPassenger.priceOverride) || 0;
       
-      const assignedPaymentMethod = taquillaPassenger.status === 'pending' ? 'pendiente de pago' : 'cash';
-      
-      // 1. Insertamos Boleto de Ida
       const { data: newBooking, error } = await supabase.from('bookings').insert({
         booking_ref: bookingRef, 
         trip_id: taquillaSelectedTrip.id, 
         passenger_name: taquillaPassenger.name, 
         passenger_email: 'taquilla@bonillatours.com', 
         passenger_phone: taquillaPassenger.phone || '0000000000', 
-        payment_method: assignedPaymentMethod, 
+        payment_method: 'cash', 
         status: taquillaPassenger.status, 
         is_guest: true, 
         total_price: unitPrice * taquillaSelectedSeats.length, 
@@ -446,12 +424,10 @@ export default function AdminDashboard() {
 
       let returnTripId = null;
 
-      // 2. Lógica para el BOLETO DUPLICADO DE REGRESO (SOLO SI HAY FECHA)
-      if ((isRound || is15) && !taquillaOpenReturn && taquillaReturnDate) {
-        
+      if ((isRound || is15) && taquillaReturnDate) {
         const { data: existingTrips } = await supabase
           .from('trips')
-          .select('*')
+          .select('id')
           .eq('date', taquillaReturnDate)
           .eq('origin', taquillaForm.destination.trim())
           .eq('destination', taquillaForm.origin.trim())
@@ -468,13 +444,18 @@ export default function AdminDashboard() {
               date: taquillaReturnDate,
               departure_time: '22:00',
               arrival_time: '08:00',
+              duration: "Automático Regreso",
               price: taquillaSelectedTrip.price || 0,
+              prices: {},
+              round_trip_prices: {},
+              price_15_days: taquillaSelectedTrip.price_15_days || 0,
               available_seats: taquillaSelectedTrip.total_seats || 40,
               total_seats: taquillaSelectedTrip.total_seats || 40,
               bus_type: taquillaSelectedTrip.bus_type || "Estándar",
-              amenities: taquillaSelectedTrip.amenities || []
+              amenities: taquillaSelectedTrip.amenities || [],
+              occupied_seats: []
             })
-            .select()
+            .select('id')
             .single();
 
           if (!tripError && newTrip) {
@@ -484,7 +465,6 @@ export default function AdminDashboard() {
 
         if (returnTripId) {
           const returnBookingRef = "BT-R" + Math.floor(100000 + Math.random() * 900000).toString().slice(0, 5);
-          
           await supabase
             .from('bookings')
             .insert({
@@ -495,32 +475,27 @@ export default function AdminDashboard() {
               passenger_name: taquillaPassenger.name,
               passenger_email: 'taquilla@bonillatours.com',
               passenger_phone: taquillaPassenger.phone || '0000000000',
-              payment_method: assignedPaymentMethod,
+              payment_method: 'cash',
               status: taquillaPassenger.status, 
               is_guest: true,
-              total_price: 0,
+              total_price: 0, 
               origin: taquillaForm.destination.trim(),
               destination: taquillaForm.origin.trim(),
               is_round_trip: isRound,
               is_15_days: is15,
               created_at: new Date(`${taquillaSaleDate}T12:00:00Z`).toISOString()
             });
+            
+            await supabase.from('bookings').update({ 
+              return_trip_id: returnTripId 
+            }).eq('id', newBooking.id);
         }
       }
 
-      // 3. Ligar el boleto de regreso al boleto original si se creó uno
-      if (returnTripId) {
-        await supabase.from('bookings').update({ 
-          return_trip_id: returnTripId 
-        }).eq('id', newBooking.id);
-      }
-
-      await logAction('CREAR_BOLETO', `Emitió boleto ${bookingRef} en taquilla para ${taquillaPassenger.name} (${taquillaPassenger.status === 'pending' ? 'Apartado' : 'Pagado'})`);
-      
-      alert(`¡Operación Exitosa! Folio: ${bookingRef} ${taquillaOpenReturn ? '(Fecha de regreso abierta)' : ''}`);
+      await logAction('CREAR_BOLETO', `Emitió boleto ${bookingRef} en taquilla para ${taquillaPassenger.name}`);
+      alert(`¡Venta Exitosa! Folio: ${bookingRef}`);
       setTaquillaSelectedTrip(null);
-      setTaquillaReturnDate(''); 
-      setTaquillaOpenReturn(false);
+      setTaquillaReturnDate('');
       fetchRealData();
     } catch (err: any) { alert("Error: " + err.message); } finally { setIsSelling(false); }
   };
@@ -554,7 +529,6 @@ export default function AdminDashboard() {
     } catch (error: any) { alert("Error: " + error.message); } finally { setIsSavingPrice(false); }
   };
 
-  // --- PROGRAMAR VIAJE ---
   const handleCreateTrip = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsCreatingTrip(true);
@@ -642,8 +616,8 @@ export default function AdminDashboard() {
   const datosAgrupados = agruparPorMes(finalFilteredData);
 
   const handleExportCSV = () => {
-    const headers = "Folio,Estado,Concepto,Origen,Destino,Pasajero,Método de Pago,Fecha/Hora,Monto\n";
-    const rows = finalFilteredData.map((item: any) => `${item.folio},${item.status},${item.tipo},"${item.origen}","${item.destino}","${item.cliente}",${item.metodoPago},"${item.fechaCompleta}",${item.monto}`).join("\n");
+    const headers = "Folio,Estado,Concepto,Origen,Destino,Pasajero,Método de Pago,Fecha/Hora Compra,Fecha/Hora Abordaje,Monto\n";
+    const rows = finalFilteredData.map((item: any) => `${item.folio},${item.status},${item.tipo},"${item.origen}","${item.destino}","${item.cliente}",${item.metodoPago},"${item.fechaCompra}","${item.fechaViaje} ${item.horaViaje}",${item.monto}`).join("\n");
     const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(headers + rows);
     const link = document.createElement("a");
     link.setAttribute("href", csvContent);
@@ -657,7 +631,7 @@ export default function AdminDashboard() {
     if (item.status !== 'pagado') { alert("Solo se pueden generar tickets de compras pagadas."); return; }
     const printWindow = window.open('', '', 'width=300,height=600');
     if (!printWindow) return;
-    const html = `<!DOCTYPE html><html><head><title>Ticket ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .ticket { width: 58mm; padding: 2mm 3mm; box-sizing: border-box; font-size: 11px; line-height: 1.2; } .header { text-align: center; margin-bottom: 6px; border-bottom: 1px dashed #000; padding-bottom: 6px; } .header h2 { margin: 0; font-size: 14px; font-weight: bold; } .header p { margin: 2px 0 0 0; font-size: 9px; } .item { margin-bottom: 4px; } .label { font-weight: bold; font-size: 10px; display: block; } .value { display: block; font-size: 11px; margin-left: 4px; word-break: break-word; } .total { font-size: 13px; font-weight: bold; border-top: 1px dashed #000; padding-top: 6px; margin-top: 6px; text-align: right; } .footer { text-align: center; margin-top: 15px; font-size: 9px; padding-bottom: 15px; }</style></head><body><div class="ticket"><div class="header"><h2>BONILLA TOURS</h2><p>Comprobante de Pago</p></div><div class="item"><span class="label">Folio:</span> <span class="value">${item.folio}</span></div><div class="item"><span class="label">Fecha:</span> <span class="value">${item.fechaCompleta}</span></div><div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="item"><span class="label">Teléfono:</span> <span class="value">${item.telefono}</span></div><div class="item"><span class="label">Ruta:</span> <span class="value">${item.origen} a ${item.destino}</span></div><div class="item"><span class="label">Concepto:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'S/A'}</span></div><div class="item"><span class="label">Método:</span> <span class="value">${item.metodoPago}</span></div><div class="total">TOTAL: $${Number(item.monto).toFixed(2)}</div><div class="footer"><p style="margin-bottom: 2px;">¡Gracias por su preferencia!</p><p style="margin-top:0;">Conserve este ticket</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
+    const html = `<!DOCTYPE html><html><head><title>Ticket ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .ticket { width: 58mm; padding: 2mm 3mm; box-sizing: border-box; font-size: 11px; line-height: 1.2; } .header { text-align: center; margin-bottom: 6px; border-bottom: 1px dashed #000; padding-bottom: 6px; } .header h2 { margin: 0; font-size: 14px; font-weight: bold; } .header p { margin: 2px 0 0 0; font-size: 9px; } .item { margin-bottom: 4px; } .label { font-weight: bold; font-size: 10px; display: block; } .value { display: block; font-size: 11px; margin-left: 4px; word-break: break-word; } .total { font-size: 13px; font-weight: bold; border-top: 1px dashed #000; padding-top: 6px; margin-top: 6px; text-align: right; } .footer { text-align: center; margin-top: 15px; font-size: 9px; padding-bottom: 15px; }</style></head><body><div class="ticket"><div class="header"><h2>BONILLA TOURS</h2><p>Comprobante de Pago</p></div><div class="item"><span class="label">Folio:</span> <span class="value">${item.folio}</span></div><div class="item"><span class="label">Fecha Compra:</span> <span class="value">${item.fechaCompra}</span></div><div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="item"><span class="label">Ruta:</span> <span class="value">${item.origen} a ${item.destino}</span></div><div class="item"><span class="label">Concepto:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Método:</span> <span class="value">${item.metodoPago}</span></div><div class="total">TOTAL: $${Number(item.monto).toFixed(2)}</div><div class="footer"><p style="margin-bottom: 2px;">¡Gracias por su preferencia!</p><p style="margin-top:0;">Conserve este ticket</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
     printWindow.document.write(html); printWindow.document.close();
   };
 
@@ -668,7 +642,7 @@ export default function AdminDashboard() {
     
     const qrUrl = encodeURIComponent(`https://bonillawww.vercel.app/?folio=${item.id}`);
 
-    const html = `<!DOCTYPE html><html><head><title>Boleto ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .boleto { width: 58mm; padding: 2mm 2mm; box-sizing: border-box; } .text-center { text-align: center; } .text-bold { font-weight: bold; } .logo { max-width: 40mm; margin: 0 auto 5px; display: block; } .divider { border-bottom: 1px dashed #000; margin: 6px 0; } .item { margin-bottom: 4px; } .label { font-size: 9px; font-weight: bold; display: block; } .value { font-size: 11px; display: block; margin-left: 2px; word-break: break-word; } .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; } .dest-label { font-size: 9px; font-weight: bold; margin-bottom: 2px; } .dest-value { font-size: 13px; font-weight: bold; text-transform: uppercase; } .qr-container { text-align: center; margin: 8px 0; } .qr-code { width: 35mm; height: 35mm; margin: 0 auto; display: block; } .terms { font-size: 8px; text-align: left; margin-top: 8px; line-height: 1.1; } .terms h4 { font-size: 9px; text-align: center; margin: 0 0 4px 0; border-bottom: 1px solid #000; padding-bottom: 2px; } .terms p { margin: 2px 0; }</style></head><body><div class="boleto"><img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" /><div class="text-center text-bold" style="font-size: 12px;">BOLETO DE VIAJE</div><div class="divider"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="item"><span class="label">Teléfono:</span> <span class="value">${item.telefono}</span></div><div class="dest-box"><div class="dest-label">RUTA</div><div class="dest-value">${item.origen} ➔ ${item.destino}</div></div><div class="item"><span class="label">Fecha y Hora:</span> <span class="value">${item.fechaViaje} - ${item.horaViaje}</span></div><div class="item"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span></div><div class="item"><span class="label">Total Pagado:</span> <span class="value text-bold">$${Number(item.monto).toFixed(2)} MXN</span></div><div class="divider"></div><div class="qr-container"><img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}" alt="QR" /><div class="label" style="margin-top:4px;">Folio de Reserva</div><div class="text-bold" style="font-size: 13px;">${item.folio}</div><div style="font-size: 8px; margin-top: 4px;">Emitido: ${item.fechaCompleta}</div></div><div class="divider"></div><div class="terms"><h4>TÉRMINOS Y CONDICIONES</h4><p>- Preséntese 20 min antes de su viaje.</p><p>- Muestre el QR o este ticket impreso para abordar.</p><p>- Tolerancia máx de 5 min en espera.</p><p>- Puntos de ascenso/descenso sujetos a cambios.</p><p>- Cancelaciones: 10% de cargo, mín. 1 hr en oficina.</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
+    const html = `<!DOCTYPE html><html><head><title>Boleto ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .boleto { width: 58mm; padding: 2mm 2mm; box-sizing: border-box; } .text-center { text-align: center; } .text-bold { font-weight: bold; } .logo { max-width: 40mm; margin: 0 auto 5px; display: block; } .divider { border-bottom: 1px dashed #000; margin: 6px 0; } .item { margin-bottom: 4px; } .label { font-size: 9px; font-weight: bold; display: block; } .value { font-size: 11px; display: block; margin-left: 2px; word-break: break-word; } .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; } .dest-label { font-size: 9px; font-weight: bold; margin-bottom: 2px; } .dest-value { font-size: 13px; font-weight: bold; text-transform: uppercase; } .qr-container { text-align: center; margin: 8px 0; } .qr-code { width: 35mm; height: 35mm; margin: 0 auto; display: block; } .terms { font-size: 8px; text-align: left; margin-top: 8px; line-height: 1.1; } .terms h4 { font-size: 9px; text-align: center; margin: 0 0 4px 0; border-bottom: 1px solid #000; padding-bottom: 2px; } .terms p { margin: 2px 0; }</style></head><body><div class="boleto"><img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" /><div class="text-center text-bold" style="font-size: 12px;">BOLETO DE VIAJE</div><div class="divider"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="dest-box"><div class="dest-label">RUTA</div><div class="dest-value">${item.origen} ➔ ${item.destino}</div></div><div class="item"><span class="label">Fecha y Hora de Abordaje:</span> <span class="value">${item.fechaViaje} - ${item.horaViaje}</span></div><div class="item"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span></div><div class="item"><span class="label">Total Pagado:</span> <span class="value text-bold">$${Number(item.monto).toFixed(2)} MXN</span></div><div class="divider"></div><div class="qr-container"><img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}" alt="QR" /><div class="label" style="margin-top:4px;">Folio de Reserva</div><div class="text-bold" style="font-size: 13px;">${item.folio}</div><div style="font-size: 8px; margin-top: 4px;">Emitido: ${item.fechaCompra}</div></div><div class="divider"></div><div class="terms"><h4>TÉRMINOS Y CONDICIONES</h4><p>- Preséntese 20 min antes de su viaje.</p><p>- Muestre el QR o este ticket impreso para abordar.</p><p>- Tolerancia máx de 5 min en espera.</p><p>- Puntos de ascenso/descenso sujetos a cambios.</p><p>- Cancelaciones: 10% de cargo, mín. 1 hr en oficina.</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
     printWindow.document.write(html); printWindow.document.close();
   };
 
@@ -808,26 +782,9 @@ export default function AdminDashboard() {
 
                     {(taquillaPassenger.tripType === 'redondo' || taquillaPassenger.tripType === '15_dias') && (
                       <div className="mt-3 border-t border-gray-200 pt-3">
-                        <label className="block text-xs font-bold text-gray-700 mb-2">Opciones de Regreso</label>
-                        
-                        <div className="flex items-center gap-2 mb-3">
-                          <input 
-                            type="checkbox" 
-                            id="openReturn" 
-                            checked={taquillaOpenReturn} 
-                            onChange={(e) => setTaquillaOpenReturn(e.target.checked)}
-                            className="w-4 h-4 text-emerald-600 bg-gray-100 border-gray-300 rounded focus:ring-emerald-500"
-                          />
-                          <label htmlFor="openReturn" className="text-sm font-medium text-gray-900 cursor-pointer">Dejar fecha de regreso abierta</label>
-                        </div>
-
-                        {!taquillaOpenReturn && (
-                          <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-1">Seleccionar Fecha de Regreso</label>
-                            <input type="date" required={!taquillaOpenReturn} value={taquillaReturnDate} onChange={e => setTaquillaReturnDate(e.target.value)} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900 border-emerald-300" />
-                            <p className="text-[10px] text-emerald-700 mt-1">Se generará automáticamente el boleto de regreso.</p>
-                          </div>
-                        )}
+                        <label className="block text-xs font-bold text-gray-700 mb-1">Fecha de Regreso</label>
+                        <input type="date" required value={taquillaReturnDate} onChange={e => setTaquillaReturnDate(e.target.value)} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900 border-emerald-300" />
+                        <p className="text-[10px] text-emerald-700 mt-1">Se generará automáticamente el boleto de regreso.</p>
                       </div>
                     )}
                   </div>
@@ -851,7 +808,7 @@ export default function AdminDashboard() {
                       <label className="block text-xs font-bold text-gray-700 mb-1">Estado del Boleto</label>
                       <select value={taquillaPassenger.status} onChange={e => setTaquillaPassenger({...taquillaPassenger, status: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-semibold bg-white text-gray-900">
                         <option value="confirmed">Pagado en Taquilla (Confirmado)</option>
-                        <option value="pending">Solo Apartar (Pendiente de Pago)</option>
+                        <option value="pending">Solo Apartar (Pendiente)</option>
                       </select>
                     </div>
                   </div>
@@ -1032,7 +989,16 @@ export default function AdminDashboard() {
               <div className="overflow-x-auto max-h-[600px]">
                 <table className="w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-white text-gray-500 font-medium border-b sticky top-0 z-10">
-                    <tr><th className="px-6 py-4">Ref/Folio</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4">Concepto</th><th className="px-6 py-4">Ruta (Pasajero)</th><th className="px-6 py-4">Método</th><th className="px-6 py-4">Fecha/Hora</th><th className="px-6 py-4 text-right">Monto</th><th className="px-6 py-4 text-center">Acciones</th></tr>
+                    <tr>
+                      <th className="px-6 py-4">Ref/Folio</th>
+                      <th className="px-6 py-4">Estado</th>
+                      <th className="px-6 py-4">Concepto</th>
+                      <th className="px-6 py-4">Ruta (Pasajero)</th>
+                      <th className="px-6 py-4">Método</th>
+                      <th className="px-6 py-4">Fecha/Hora Abordaje</th>
+                      <th className="px-6 py-4 text-right">Monto</th>
+                      <th className="px-6 py-4 text-center">Acciones</th>
+                    </tr>
                   </thead>
                   <tbody className="divide-y text-gray-800">
                     {Object.keys(datosAgrupados).length === 0 ? (
@@ -1050,38 +1016,30 @@ export default function AdminDashboard() {
                                 <span className="flex items-center gap-1 text-red-700 bg-red-100 px-2 py-1 rounded-full text-xs font-bold w-fit"><XCircle size={12}/> Cancelado</span>}
                               </td>
                               <td className="px-6 py-4"><span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-md text-xs font-semibold">{item.tipo}</span></td>
-                              
-                              {/* --- NUEVOS DATOS EN LA TABLA: TELÉFONO Y ASIENTOS --- */}
                               <td className="px-6 py-4 font-medium max-w-[200px] truncate" title={`${item.cliente} (${item.origen} a ${item.destino})`}>
-                                <p className="font-bold text-gray-900">{item.cliente}</p>
-                                <p className="text-xs text-gray-600 mt-1">📱 {item.telefono}</p>
-                                <p className="text-xs text-gray-600">💺 Asiento(s): {item.asientos && item.asientos.length > 0 ? item.asientos.join(', ') : 'N/A'}</p>
-                                <p className="text-xs text-gray-400 mt-1">📍 {item.origen} a {item.destino}</p>
+                                <p>{item.cliente}</p>
+                                <p className="text-xs text-gray-500 font-normal">{item.origen} a {item.destino}</p>
                               </td>
-
                               <td className="px-6 py-4 font-medium">{item.metodoPago}</td>
-                              <td className="px-6 py-4 text-gray-500">{item.fechaCompleta}</td>
+                              
+                              {/* NUEVA COLUMNA CON LA FECHA Y HORA DE ABORDAJE RESALTADAS */}
+                              <td className="px-6 py-4">
+                                <span className="font-bold text-gray-900 bg-gray-200 px-2 py-1 rounded-md text-xs inline-block">
+                                  {item.fechaViaje} ➔ {item.horaViaje}
+                                </span>
+                              </td>
+                              
                               <td className="px-6 py-4 text-right font-bold text-gray-900">${Number(item.monto).toLocaleString()}</td>
                               
                               <td className="px-6 py-4 text-center flex justify-center gap-2">
                                 {item.status === 'pendiente' && (
                                   <button onClick={() => handleMarkAsPaid(item.id, item.folio)} className="p-2 text-green-600 hover:bg-green-100 rounded-lg cursor-pointer transition-colors" title="Confirmar Pago en Efectivo"><CheckSquare size={18} /></button>
                                 )}
-                                
-                                {(userRole === 'admin' || userRole === 'supervisor') && (
-                                  <button onClick={() => { 
-                                    const tipoFormat = item.tipo === 'Viaje Redondo' ? 'redondo' : item.tipo === 'Paquete 15 Días' ? '15_dias' : 'sencillo';
-                                    setEditingTicketType({ id: item.id, folio: item.folio, tipoActual: tipoFormat, nuevoTipo: tipoFormat }); 
-                                    setShowEditTypeModal(true); 
-                                  }} className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg cursor-pointer transition-colors" title="Editar Tipo de Viaje"><RefreshCw size={18} /></button>
-                                )}
-
                                 {userRole === 'admin' && (
                                   <button onClick={() => { let currentMethod = 'efectivo'; if (item.metodoPago === 'Tarjeta') currentMethod = 'tarjeta'; if (item.metodoPago === 'Transferencia') currentMethod = 'transferencia'; if (item.metodoPago === 'Pendiente de Pago') currentMethod = 'pendiente de pago'; setEditingPayment({ id: item.id, folio: item.folio, method: currentMethod }); setShowEditPaymentModal(true); }} className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-lg cursor-pointer transition-colors" title="Editar Método de Pago"><CreditCard size={18} /></button>
                                 )}
                                 <button onClick={() => printTicket(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-blue-600 hover:bg-blue-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title="Imprimir Ticket"><Printer size={18} /></button>
                                 <button onClick={() => printBoleto(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-purple-600 hover:bg-purple-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title="Imprimir Boleto Abordaje"><Ticket size={18} /></button>
-                                
                                 {userRole === 'admin' && (
                                   <button onClick={() => handleDeleteBooking(item.id, item.folio)} className="p-2 text-red-600 hover:bg-red-100 rounded-lg cursor-pointer transition-colors" title="Eliminar Venta"><Trash2 size={18} /></button>
                                 )}
@@ -1120,33 +1078,6 @@ export default function AdminDashboard() {
                 <div className="pt-4 flex gap-3 border-t mt-6">
                   <button type="button" onClick={() => setShowEditPaymentModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
                   <button type="submit" disabled={isUpdatingPayment} className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-xl transition-colors">{isUpdatingPayment ? 'Guardando...' : 'Guardar Cambios'}</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* --- MODAL PARA EDITAR TIPO DE BOLETO --- */}
-        {showEditTypeModal && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-              <div className="bg-blue-600 px-6 py-4 flex justify-between items-center text-white">
-                <h3 className="font-bold text-lg flex items-center gap-2"><RefreshCw /> Editar Tipo de Boleto</h3>
-                <button onClick={() => setShowEditTypeModal(false)} className="text-blue-200 hover:text-white"><XCircle /></button>
-              </div>
-              <form onSubmit={handleUpdateTicketType} className="p-6 space-y-4">
-                <p className="text-sm text-gray-600">Modificando el tipo de boleto para el folio <strong className="text-gray-900">{editingTicketType.folio}</strong></p>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Nuevo Tipo de Viaje</label>
-                  <select value={editingTicketType.nuevoTipo} onChange={e => setEditingTicketType({...editingTicketType, nuevoTipo: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-semibold text-gray-900 bg-white">
-                    <option value="sencillo">Viaje Sencillo</option>
-                    <option value="redondo">Viaje Redondo (Ida y Vuelta)</option>
-                    <option value="15_dias">Paquete 15 Días</option>
-                  </select>
-                </div>
-                <div className="pt-4 flex gap-3 border-t mt-6">
-                  <button type="button" onClick={() => setShowEditTypeModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
-                  <button type="submit" disabled={isUpdatingType} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors">{isUpdatingType ? 'Guardando...' : 'Guardar Cambios'}</button>
                 </div>
               </form>
             </div>
@@ -1219,14 +1150,10 @@ export default function AdminDashboard() {
                         return (
                           <tr key={p.id} className="hover:bg-cyan-50 transition-colors">
                             <td className="px-4 py-4 font-mono font-bold text-gray-600">{p.booking_ref}</td>
-                            
-                            {/* --- TELÉFONO AGREGADO EN EL MANIFIESTO --- */}
                             <td className="px-4 py-4">
                               <span className="font-bold text-gray-900 block">{p.passenger_name}</span>
-                              <span className="text-xs text-gray-600 mt-1 block">📱 {p.passenger_phone || 'N/A'}</span>
-                              <span className="text-xs text-gray-400 block">Ruta: {p.origin} ➔ {p.destination}</span>
+                              <span className="text-xs text-gray-500 mt-1 block">Ruta: {p.origin} ➔ {p.destination}</span>
                             </td>
-
                             <td className="px-4 py-4 text-center font-bold">{p.seats.join(', ') || 'N/A'}</td>
                             <td className="px-4 py-4 text-center">
                               {isBoarded ? <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full text-xs font-black">ABORDÓ</span> : <span className="bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1 rounded-full text-xs font-black">PENDIENTE</span>}

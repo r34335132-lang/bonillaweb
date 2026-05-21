@@ -172,7 +172,6 @@ export default function AdminDashboard() {
   const fetchRealData = async () => {
     setLoading(true);
     try {
-      // SE AGREGÓ passenger_phone PARA OBTENER EL TELÉFONO
       const { data: bookingsData } = await supabase
         .from('bookings')
         .select('id, booking_ref, folio, status, created_at, total_price, passenger_name, passenger_phone, is_round_trip, is_15_days, payment_method, origin, destination, seats, trip:trips!bookings_trip_id_fkey(date, departure_time)')
@@ -593,6 +592,28 @@ export default function AdminDashboard() {
     } catch (err: any) { alert("Error: " + err.message); } finally { setIsCreatingParcel(false); }
   };
 
+  // --- NUEVAS FUNCIONES PARA PAQUETERÍA ---
+  const handleUpdateParcelStatus = async (parcelId: string, newStatus: string, folio: string) => {
+    try {
+      const { error } = await supabase.from('parcels').update({ status: newStatus }).eq('id', parcelId);
+      if (error) throw error;
+      await logAction('EDITAR_PAQUETE', `Cambió estado del paquete PAQ-${folio} a ${newStatus}`);
+      fetchRealData(); 
+    } catch (err: any) { 
+      alert("Error al actualizar el estado: " + err.message); 
+    }
+  };
+
+  const printParcelTicket = (item: any) => {
+    const printWindow = window.open('', '', 'width=300,height=600');
+    if (!printWindow) return;
+    
+    const qrUrl = encodeURIComponent(`PAQ-${item.folio}`);
+
+    const html = `<!DOCTYPE html><html><head><title>Ticket Paquete PAQ-${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .ticket { width: 58mm; padding: 2mm 3mm; box-sizing: border-box; font-size: 11px; line-height: 1.2; } .header { text-align: center; margin-bottom: 6px; border-bottom: 1px dashed #000; padding-bottom: 6px; } .header h2 { margin: 0; font-size: 14px; font-weight: bold; } .header p { margin: 2px 0 0 0; font-size: 10px; font-weight: bold; } .item { margin-bottom: 4px; } .label { font-weight: bold; font-size: 10px; display: block; } .value { display: block; font-size: 11px; margin-left: 4px; word-break: break-word; } .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; } .dest-value { font-size: 12px; font-weight: bold; text-transform: uppercase; } .total { font-size: 13px; font-weight: bold; border-top: 1px dashed #000; padding-top: 6px; margin-top: 6px; text-align: right; } .qr-container { text-align: center; margin: 8px 0; } .qr-code { width: 30mm; height: 30mm; margin: 0 auto; display: block; } .footer { text-align: center; margin-top: 15px; font-size: 9px; padding-bottom: 15px; }</style></head><body><div class="ticket"><div class="header"><h2>BONILLA TOURS</h2><p>ENVÍO DE PAQUETERÍA</p></div><div class="item"><span class="label">Folio Rastreo:</span> <span class="value font-bold" style="font-size: 14px;">PAQ-${item.folio}</span></div><div class="item"><span class="label">Fecha:</span> <span class="value">${new Date(item.created_at).toLocaleString()}</span></div><div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div><div class="item"><span class="label">Remitente:</span> <span class="value">${item.sender_name}</span></div><div class="item"><span class="label">Destinatario:</span> <span class="value">${item.receiver_name}</span></div><div class="dest-box"><div class="label" style="text-align:center;">RUTA</div><div class="dest-value">${item.origin} ➔ ${item.destination}</div></div><div class="total">COSTO: $${Number(item.price).toFixed(2)}</div><div class="qr-container"><img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}" alt="QR" /><div class="label" style="margin-top:4px;">Estado Actual: ${item.status === 'pending' ? 'RECIBIDO' : item.status === 'en_transito' ? 'EN TRÁNSITO' : 'LLEGÓ A DESTINO'}</div></div><div class="footer"><p style="margin-bottom: 2px;">¡Gracias por utilizar nuestro servicio!</p><p style="margin-top:0;">Conserve este ticket para reclamar su paquete</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+  };
+
   if (!isClient) return null;
 
   if (authLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-medium text-gray-500">Cargando plataforma...</div>;
@@ -983,13 +1004,53 @@ export default function AdminDashboard() {
               </form>
             </div>
             <div className="bg-white rounded-xl border shadow-sm col-span-2 overflow-hidden">
-              <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center"><h2 className="font-bold text-gray-800">Historial</h2></div>
+              <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center"><h2 className="font-bold text-gray-800">Historial de Paquetes</h2></div>
               <div className="overflow-x-auto max-h-[500px]">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-white text-gray-500 font-medium border-b sticky top-0"><tr><th className="px-4 py-3">Folio</th><th className="px-4 py-3">Ruta</th><th className="px-4 py-3">Pasajero</th><th className="px-4 py-3 text-right">Cobro</th></tr></thead>
+                  <thead className="bg-white text-gray-500 font-medium border-b sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3">Rastreo</th>
+                      <th className="px-4 py-3">Ruta</th>
+                      <th className="px-4 py-3">Pasajeros (Rem/Dest)</th>
+                      <th className="px-4 py-3 text-right">Cobro</th>
+                      <th className="px-4 py-3 text-center">Estado del Envío</th>
+                      <th className="px-4 py-3 text-center">Acciones</th>
+                    </tr>
+                  </thead>
                   <tbody className="divide-y text-gray-800">
                     {parcels.map((p: any) => (
-                      <tr key={p.id} className="hover:bg-gray-50"><td className="px-4 py-3 font-mono font-bold text-orange-700">PAQ-{p.folio}</td><td className="px-4 py-3 text-xs font-medium">{p.origin} a {p.destination}</td><td className="px-4 py-3 truncate">{p.sender_name}</td><td className="px-4 py-3 text-right font-bold">${Number(p.price).toFixed(2)}</td></tr>
+                      <tr key={p.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-mono font-bold text-orange-700">PAQ-{p.folio}</td>
+                        <td className="px-4 py-3 text-xs font-medium">{p.origin} a {p.destination}</td>
+                        <td className="px-4 py-3 text-xs">
+                          <span className="block font-bold text-gray-700">De: {p.sender_name}</span>
+                          <span className="block text-gray-500">Para: {p.receiver_name}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold">${Number(p.price).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-center">
+                          <select 
+                            value={p.status || 'pending'} 
+                            onChange={(e) => handleUpdateParcelStatus(p.id, e.target.value, p.folio)}
+                            className={`border rounded-lg px-2 py-1 text-xs font-bold w-full cursor-pointer outline-none transition-colors
+                              ${p.status === 'en_transito' ? 'bg-blue-100 text-blue-800 border-blue-300' : 
+                                p.status === 'entregado' ? 'bg-green-100 text-green-800 border-green-300' : 
+                                'bg-yellow-100 text-yellow-800 border-yellow-300'}`}
+                          >
+                            <option value="pending">🟡 Bodega</option>
+                            <option value="en_transito">🔵 En Tránsito</option>
+                            <option value="entregado">🟢 Llegó a Destino</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-3 text-center flex justify-center">
+                          <button 
+                            onClick={() => printParcelTicket(p)} 
+                            className="p-2 text-gray-600 hover:bg-orange-100 hover:text-orange-600 rounded-lg cursor-pointer transition-colors" 
+                            title="Imprimir Guía de Paquete"
+                          >
+                            <Printer size={18} />
+                          </button>
+                        </td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>

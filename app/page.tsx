@@ -67,7 +67,7 @@ export default function AdminDashboard() {
   const [taquillaSelectedTrip, setTaquillaSelectedTrip] = useState<any>(null);
   const [taquillaOccupiedSeats, setTaquillaOccupiedSeats] = useState<number[]>([]);
   const [taquillaSelectedSeats, setTaquillaSelectedSeats] = useState<number[]>([]);
-  const [taquillaPassenger, setTaquillaPassenger] = useState({ name: '', phone: '', status: 'confirmed', priceOverride: '', tripType: 'sencillo' });
+  const [taquillaPassenger, setTaquillaPassenger] = useState({ name: '', phone: '', status: 'confirmed-efectivo', priceOverride: '', tripType: 'sencillo' });
   const [isSelling, setIsSelling] = useState(false);
 
   // --- ESTADOS: REGISTRO HISTÓRICO ---
@@ -174,7 +174,7 @@ export default function AdminDashboard() {
     try {
       const { data: bookingsData } = await supabase
         .from('bookings')
-        .select('id, booking_ref, folio, status, created_at, total_price, passenger_name, passenger_phone, is_round_trip, is_15_days, payment_method, origin, destination, seats, trip:trips!bookings_trip_id_fkey(date, departure_time)')
+        .select('id, booking_ref, folio, status, created_at, total_price, passenger_name, passenger_phone, is_round_trip, is_15_days, payment_method, origin, destination, seats, commission_amount, is_guest, trip:trips!bookings_trip_id_fkey(date, departure_time)')
         .order('created_at', { ascending: false })
         .limit(1500);
 
@@ -199,9 +199,16 @@ export default function AdminDashboard() {
           if (b.is_15_days) tipoViaje = 'Paquete 15 Días';
           else if (b.is_round_trip) tipoViaje = 'Viaje Redondo';
 
+          // Manejo de comisiones
+          let comision = b.commission_amount || (b.is_guest === false ? 100 : 0);
+          let montoOriginal = b.total_price || 0;
+          let montoNeto = montoOriginal - comision;
+
           return {
             id: b.id, folio: b.booking_ref || `FOLIO-${b.folio}`, tipo: tipoViaje, 
-            cliente: b.passenger_name || 'Sin nombre', telefono: b.passenger_phone || 'N/A', monto: b.total_price || 0, status: estadoUI,
+            cliente: b.passenger_name || 'Sin nombre', telefono: b.passenger_phone || 'N/A', 
+            montoOriginal: montoOriginal, monto: montoNeto, comision: comision, isAppSale: b.is_guest === false,
+            status: estadoUI,
             metodoPago: metodoPagoUI, fechaCompleta: fechaBD.toLocaleString(), dateOnly: dateOnly,
             origen: b.origin || 'N/A', destino: b.destination || 'N/A',
             asientos: b.seats || [],
@@ -379,7 +386,7 @@ export default function AdminDashboard() {
       finalPrice = trip.price;
     }
     
-    setTaquillaPassenger(prev => ({ ...prev, name: '', phone: '', status: 'confirmed', priceOverride: finalPrice.toString() }));
+    setTaquillaPassenger(prev => ({ ...prev, name: '', phone: '', status: 'confirmed-efectivo', priceOverride: finalPrice.toString() }));
     setTaquillaSelectedTrip(trip);
   };
 
@@ -422,7 +429,11 @@ export default function AdminDashboard() {
       const bookingRef = "BT-" + Math.floor(100000 + Math.random() * 900000).toString().slice(0, 6);
       const unitPrice = Number(taquillaPassenger.priceOverride) || 0;
       
-      const assignedPaymentMethod = taquillaPassenger.status === 'pending' ? 'pendiente de pago' : 'cash';
+      let assignedPaymentMethod = 'cash';
+      let realStatus = 'confirmed';
+      if (taquillaPassenger.status === 'pending') { assignedPaymentMethod = 'pendiente de pago'; realStatus = 'pending'; }
+      else if (taquillaPassenger.status === 'confirmed-tarjeta') { assignedPaymentMethod = 'tarjeta'; }
+      else if (taquillaPassenger.status === 'confirmed-transferencia') { assignedPaymentMethod = 'transferencia'; }
       
       const { data: newBooking, error } = await supabase.from('bookings').insert({
         booking_ref: bookingRef, 
@@ -431,7 +442,7 @@ export default function AdminDashboard() {
         passenger_email: 'taquilla@bonillatours.com', 
         passenger_phone: taquillaPassenger.phone || '0000000000', 
         payment_method: assignedPaymentMethod, 
-        status: taquillaPassenger.status, 
+        status: realStatus, 
         is_guest: true, 
         total_price: unitPrice * taquillaSelectedSeats.length, 
         origin: taquillaForm.origin, 
@@ -495,7 +506,7 @@ export default function AdminDashboard() {
               passenger_email: 'taquilla@bonillatours.com',
               passenger_phone: taquillaPassenger.phone || '0000000000',
               payment_method: assignedPaymentMethod,
-              status: taquillaPassenger.status, 
+              status: realStatus, 
               is_guest: true,
               total_price: 0,
               origin: taquillaForm.destination.trim(),
@@ -583,7 +594,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     setIsCreatingParcel(true);
     try {
-      const { error } = await supabase.from('parcels').insert({ sender_name: parcelForm.sender, receiver_name: parcelForm.receiver, origin: parcelForm.origin, destination: parcelForm.destination, price: Number(parcelForm.price), status: 'pending' });
+      const { error } = await supabase.from('parcels').insert({ sender_name: parcelForm.sender, receiver_name: parcelForm.receiver, origin: parcelForm.origin, destination: parcelForm.destination, price: Number(parcelForm.price), status: 'pending', is_paid: false });
       if (error) throw error;
       await logAction('CREAR_PAQUETE', `Registró paquete de ${parcelForm.sender} a ${parcelForm.receiver}`);
       alert("Paquete registrado.");
@@ -602,6 +613,26 @@ export default function AdminDashboard() {
     } catch (err: any) { 
       alert("Error al actualizar el estado: " + err.message); 
     }
+  };
+
+  const handleUpdateParcelPayment = async (parcelId: string, isPaid: boolean, folio: string) => {
+    try {
+      const { error } = await supabase.from('parcels').update({ is_paid: isPaid }).eq('id', parcelId);
+      if (error) throw error;
+      await logAction('PAGO_PAQUETE', `Marcó el paquete PAQ-${folio} como ${isPaid ? 'Pagado' : 'Por Pagar'}`);
+      fetchRealData();
+    } catch (err: any) { alert("Error: " + err.message); }
+  };
+
+  const handleUpdateParcelPrice = async (parcelId: string, newPrice: string, folio: string) => {
+    const parsed = Number(newPrice);
+    if (isNaN(parsed)) return;
+    try {
+      const { error } = await supabase.from('parcels').update({ price: parsed }).eq('id', parcelId);
+      if (error) throw error;
+      await logAction('EDITAR_PAQUETE', `Actualizó precio del paquete PAQ-${folio} a $${parsed}`);
+      fetchRealData();
+    } catch (err: any) { alert("Error: " + err.message); }
   };
 
   const printParcelTicket = (item: any) => {
@@ -686,7 +717,7 @@ export default function AdminDashboard() {
     
     const qrUrl = encodeURIComponent(`https://bonillawww.vercel.app/?folio=${item.id}`);
 
-    const html = `<!DOCTYPE html><html><head><title>Boleto ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .boleto { width: 58mm; padding: 2mm 2mm; box-sizing: border-box; } .text-center { text-align: center; } .text-bold { font-weight: bold; } .logo { max-width: 40mm; margin: 0 auto 5px; display: block; } .divider { border-bottom: 1px dashed #000; margin: 6px 0; } .item { margin-bottom: 4px; } .label { font-size: 9px; font-weight: bold; display: block; } .value { font-size: 11px; display: block; margin-left: 2px; word-break: break-word; } .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; } .dest-label { font-size: 9px; font-weight: bold; margin-bottom: 2px; } .dest-value { font-size: 13px; font-weight: bold; text-transform: uppercase; } .qr-container { text-align: center; margin: 8px 0; } .qr-code { width: 35mm; height: 35mm; margin: 0 auto; display: block; } .terms { font-size: 8px; text-align: left; margin-top: 8px; line-height: 1.1; } .terms h4 { font-size: 9px; text-align: center; margin: 0 0 4px 0; border-bottom: 1px solid #000; padding-bottom: 2px; } .terms p { margin: 2px 0; }</style></head><body><div class="boleto"><img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" /><div class="text-center text-bold" style="font-size: 12px;">BOLETO DE VIAJE</div><div class="divider"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="item"><span class="label">Teléfono:</span> <span class="value">${item.telefono}</span></div><div class="dest-box"><div class="dest-label">RUTA</div><div class="dest-value">${item.origen} ➔ ${item.destino}</div></div><div class="item"><span class="label">Fecha y Hora de Abordaje:</span> <span class="value">${item.fechaViaje} - ${item.horaViaje}</span></div><div class="item"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span></div><div class="item"><span class="label">Total Pagado:</span> <span class="value text-bold">$${Number(item.monto).toFixed(2)} MXN</span></div><div class="divider"></div><div class="qr-container"><img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}" alt="QR" /><div class="label" style="margin-top:4px;">Folio de Reserva</div><div class="text-bold" style="font-size: 13px;">${item.folio}</div><div style="font-size: 8px; margin-top: 4px;">Emitido: ${item.fechaCompra}</div></div><div class="divider"></div><div class="terms"><h4>TÉRMINOS Y CONDICIONES</h4><p>- Preséntese 20 min antes de su viaje.</p><p>- Muestre el QR o este ticket impreso para abordar.</p><p>- Tolerancia máx de 5 min en espera.</p><p>- Puntos de ascenso/descenso sujetos a cambios.</p><p>- Cancelaciones: 10% de cargo, mín. 1 hr en oficina.</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
+    const html = `<!DOCTYPE html><html><head><title>Boleto ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .boleto { width: 58mm; padding: 2mm 2mm; box-sizing: border-box; } .text-center { text-align: center; } .text-bold { font-weight: bold; } .logo { max-width: 40mm; margin: 0 auto 5px; display: block; } .divider { border-bottom: 1px dashed #000; margin: 6px 0; } .item { margin-bottom: 4px; } .label { font-size: 9px; font-weight: bold; display: block; } .value { font-size: 11px; display: block; margin-left: 2px; word-break: break-word; } .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; } .dest-label { font-size: 9px; font-weight: bold; margin-bottom: 2px; } .dest-value { font-size: 13px; font-weight: bold; text-transform: uppercase; } .qr-container { text-align: center; margin: 8px 0; } .qr-code { width: 35mm; height: 35mm; margin: 0 auto; display: block; } .terms { font-size: 8px; text-align: left; margin-top: 8px; line-height: 1.1; } .terms h4 { font-size: 9px; text-align: center; margin: 0 0 4px 0; border-bottom: 1px solid #000; padding-bottom: 2px; } .terms p { margin: 2px 0; }</style></head><body><div class="boleto"><img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" /><div class="text-center text-bold" style="font-size: 12px;">BOLETO DE VIAJE</div><div class="divider"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="item"><span class="label">Teléfono:</span> <span class="value">${item.telefono}</span></div><div class="dest-box"><div class="dest-label">RUTA</div><div class="dest-value">${item.origen} ➔ ${item.destino}</div></div><div class="item"><span class="label">Fecha y Hora de Abordaje:</span> <span class="value">${item.fechaViaje} - ${item.horaViaje}</span></div><div class="item"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span></div><div class="item"><span class="label">Total Pagado:</span> <span class="value text-bold">$${Number(item.montoOriginal).toFixed(2)} MXN</span></div><div class="divider"></div><div class="qr-container"><img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}" alt="QR" /><div class="label" style="margin-top:4px;">Folio de Reserva</div><div class="text-bold" style="font-size: 13px;">${item.folio}</div><div style="font-size: 8px; margin-top: 4px;">Emitido: ${item.fechaCompra}</div></div><div class="divider"></div><div class="terms"><h4>TÉRMINOS Y CONDICIONES</h4><p>- Preséntese 20 min antes de su viaje.</p><p>- Muestre el QR o este ticket impreso para abordar.</p><p>- Tolerancia máx de 5 min en espera.</p><p>- Puntos de ascenso/descenso sujetos a cambios.</p><p>- Cancelaciones: 10% de cargo, mín. 1 hr en oficina.</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
     printWindow.document.write(html); printWindow.document.close();
   };
 
@@ -841,6 +872,16 @@ export default function AdminDashboard() {
                     )}
                   </div>
 
+                  <div className="mb-4 bg-gray-50 p-3 rounded-lg border mt-4">
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Método de Pago / Estado</label>
+                    <select value={taquillaPassenger.status} onChange={e => setTaquillaPassenger({...taquillaPassenger, status: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-semibold bg-white text-gray-900">
+                      <option value="confirmed-efectivo">💵 Efectivo (Pagado)</option>
+                      <option value="confirmed-tarjeta">💳 Tarjeta (Pagado)</option>
+                      <option value="confirmed-transferencia">🏦 Transferencia (Pagado)</option>
+                      <option value="pending">⏳ Solo Apartar (Pendiente de Pago)</option>
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Nombre Pasajero</label>
@@ -855,13 +896,6 @@ export default function AdminDashboard() {
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Precio Unitario ($)</label>
                       <input type="number" required value={taquillaPassenger.priceOverride} onChange={e => setTaquillaPassenger({...taquillaPassenger, priceOverride: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-bold text-emerald-700 bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Estado del Boleto</label>
-                      <select value={taquillaPassenger.status} onChange={e => setTaquillaPassenger({...taquillaPassenger, status: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-semibold bg-white text-gray-900">
-                        <option value="confirmed">Pagado en Taquilla (Confirmado)</option>
-                        <option value="pending">Solo Apartar (Pendiente de Pago)</option>
-                      </select>
                     </div>
                   </div>
 
@@ -1012,7 +1046,7 @@ export default function AdminDashboard() {
                       <th className="px-4 py-3">Rastreo</th>
                       <th className="px-4 py-3">Ruta</th>
                       <th className="px-4 py-3">Pasajeros (Rem/Dest)</th>
-                      <th className="px-4 py-3 text-right">Cobro</th>
+                      <th className="px-4 py-3 text-right">Cobro / Precio</th>
                       <th className="px-4 py-3 text-center">Estado del Envío</th>
                       <th className="px-4 py-3 text-center">Acciones</th>
                     </tr>
@@ -1026,7 +1060,31 @@ export default function AdminDashboard() {
                           <span className="block font-bold text-gray-700">De: {p.sender_name}</span>
                           <span className="block text-gray-500">Para: {p.receiver_name}</span>
                         </td>
-                        <td className="px-4 py-3 text-right font-bold">${Number(p.price).toFixed(2)}</td>
+                        <td className="px-4 py-3">
+                          {/* Input para confirmar/modificar precio real */}
+                          <div className="flex items-center justify-end gap-1 mb-2">
+                            <span className="text-gray-500 font-bold">$</span>
+                            <input 
+                              type="number" 
+                              defaultValue={p.price} 
+                              onBlur={(e) => handleUpdateParcelPrice(p.id, e.target.value, p.folio)}
+                              className="w-16 border rounded outline-none text-right font-bold text-orange-700 p-1" 
+                              title="Modificar precio"
+                            />
+                          </div>
+                          {/* Checkbox para Pagado / No Pagado */}
+                          <label className="flex items-center justify-end gap-2 cursor-pointer bg-gray-50 p-1 rounded border">
+                            <input 
+                              type="checkbox" 
+                              checked={p.is_paid || false} 
+                              onChange={(e) => handleUpdateParcelPayment(p.id, e.target.checked, p.folio)}
+                              className="w-4 h-4 text-emerald-600 rounded"
+                            />
+                            <span className={`text-[10px] font-bold uppercase ${p.is_paid ? 'text-emerald-700' : 'text-red-600'}`}>
+                              {p.is_paid ? 'Pagado' : 'Por Pagar'}
+                            </span>
+                          </label>
+                        </td>
                         <td className="px-4 py-3 text-center">
                           <select 
                             value={p.status || 'pending'} 
@@ -1122,7 +1180,21 @@ export default function AdminDashboard() {
                                 </span>
                               </td>
                               
-                              <td className="px-6 py-4 text-right font-bold text-gray-900">${Number(item.monto).toLocaleString()}</td>
+                              <td className="px-6 py-4 text-right">
+                                <div className="font-bold text-gray-900 text-lg">${Number(item.monto).toLocaleString()}</div>
+                                {(item.comision > 0 || item.isAppSale) && (
+                                  <div className="flex flex-col items-end mt-1">
+                                    {item.comision > 0 && (
+                                      <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">
+                                        Comisión App/Sup: -${item.comision}
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] text-gray-500 font-medium">
+                                      (Total orig: ${Number(item.montoOriginal).toLocaleString()})
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
                               
                               <td className="px-6 py-4 text-center flex justify-center gap-2">
                                 {/* BOTÓN DE DETALLES DEL OJO */}
@@ -1217,8 +1289,11 @@ export default function AdminDashboard() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="block text-xs font-bold text-gray-500 uppercase">Monto Cobrado</span>
+                    <span className="block text-xs font-bold text-gray-500 uppercase">Monto Neto a Entregar</span>
                     <span className="font-black text-emerald-600 text-xl">${Number(viewingBooking.monto).toLocaleString()} MXN</span>
+                    {viewingBooking.comision > 0 && (
+                      <span className="block text-xs text-red-600 font-bold mt-1">Comisión retenida: -${viewingBooking.comision} (Original: ${viewingBooking.montoOriginal})</span>
+                    )}
                   </div>
                   <div>
                     <span className="block text-xs font-bold text-gray-500 uppercase">Método de Pago</span>

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -32,7 +33,7 @@ export default function AdminDashboard() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const [data, setData] = useState<any[]>([]);
-  const [parcels, setParcels] = useState<any[]>([]);
+  const [parrels, setParcels] = useState<any[]>([]);
   const [defaultPrices, setDefaultPrices] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -250,9 +251,22 @@ export default function AdminDashboard() {
     } catch (error: any) { alert("Error al eliminar la venta. Revisa las políticas RLS en Supabase: " + error.message); }
   };
 
+  // --- NUEVA FUNCIÓN PARA BORRAR PAQUETES ---
+  const handleDeleteParcel = async (parcelId: string, folio: string) => {
+    if (userRole !== 'admin') return alert("Solo los administradores pueden borrar paquetes.");
+    if (!window.confirm(`¿Estás seguro de que deseas ELIMINAR el paquete PAQ-${folio}?`)) return;
+    try {
+      const { error } = await supabase.from('parcels').delete().eq('id', parcelId);
+      if (error) throw error;
+      await logAction('BORRAR_PAQUETE', `Eliminó el paquete PAQ-${folio} del sistema.`);
+      alert(`Paquete PAQ-${folio} eliminado correctamente.`);
+      fetchRealData(); 
+    } catch (error: any) { alert("Error al eliminar el paquete: " + error.message); }
+  };
+
   const handleUpdatePaymentMethod = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (userRole !== 'admin') return alert("Solo los administradores pueden editar el método de pago.");
+    if (userRole !== 'admin' && userRole !== 'supervisor') return alert("Solo administradores y supervisores pueden editar el método de pago.");
     setIsUpdatingPayment(true);
     try {
       const { error } = await supabase.from('bookings').update({ payment_method: editingPayment.method }).eq('id', editingPayment.id);
@@ -692,7 +706,7 @@ export default function AdminDashboard() {
 
   const handleExportCSV = () => {
     const headers = "Folio,Estado,Concepto,Origen,Destino,Pasajero,Método de Pago,Fecha/Hora Compra,Fecha/Hora Abordaje,Monto\n";
-    const rows = finalFilteredData.map((item: any) => `${item.folio},${item.status},${item.tipo},"${item.origen}","${item.destino}","${item.cliente}",${item.metodoPago},"${item.fechaCompra}","${item.fechaViaje} ${item.horaViaje}",${item.monto}`).join("\n");
+    const rows = finalFilteredData.map((item: any) => `${item.folio},${item.status},${item.tipo},"${item.origen}","${item.destino}","${item.cliente}",${item.metodoPago},"${item.fechaCompleta}","${item.fechaViaje} ${item.horaViaje}",${item.monto}`).join("\n");
     const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(headers + rows);
     const link = document.createElement("a");
     link.setAttribute("href", csvContent);
@@ -706,7 +720,7 @@ export default function AdminDashboard() {
     if (item.status !== 'pagado') { alert("Solo se pueden generar tickets de compras pagadas."); return; }
     const printWindow = window.open('', '', 'width=300,height=600');
     if (!printWindow) return;
-    const html = `<!DOCTYPE html><html><head><title>Ticket ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .ticket { width: 58mm; padding: 2mm 3mm; box-sizing: border-box; font-size: 11px; line-height: 1.2; } .header { text-align: center; margin-bottom: 6px; border-bottom: 1px dashed #000; padding-bottom: 6px; } .header h2 { margin: 0; font-size: 14px; font-weight: bold; } .header p { margin: 2px 0 0 0; font-size: 9px; } .item { margin-bottom: 4px; } .label { font-weight: bold; font-size: 10px; display: block; } .value { display: block; font-size: 11px; margin-left: 4px; word-break: break-word; } .total { font-size: 13px; font-weight: bold; border-top: 1px dashed #000; padding-top: 6px; margin-top: 6px; text-align: right; } .footer { text-align: center; margin-top: 15px; font-size: 9px; padding-bottom: 15px; }</style></head><body><div class="ticket"><div class="header"><h2>BONILLA TOURS</h2><p>Comprobante de Pago</p></div><div class="item"><span class="label">Folio:</span> <span class="value">${item.folio}</span></div><div class="item"><span class="label">Fecha Compra:</span> <span class="value">${item.fechaCompra}</span></div><div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="item"><span class="label">Teléfono:</span> <span class="value">${item.telefono}</span></div><div class="item"><span class="label">Ruta:</span> <span class="value">${item.origen} a ${item.destino}</span></div><div class="item"><span class="label">Concepto:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'S/A'}</span></div><div class="item"><span class="label">Método:</span> <span class="value">${item.metodoPago}</span></div><div class="total">TOTAL: $${Number(item.monto).toFixed(2)}</div><div class="footer"><p style="margin-bottom: 2px;">¡Gracias por su preferencia!</p><p style="margin-top:0;">Conserve este ticket</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
+    const html = `<!DOCTYPE html><html><head><title>Ticket ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .ticket { width: 58mm; padding: 2mm 3mm; box-sizing: border-box; font-size: 11px; line-height: 1.2; } .header { text-align: center; margin-bottom: 6px; border-bottom: 1px dashed #000; padding-bottom: 6px; } .header h2 { margin: 0; font-size: 14px; font-weight: bold; } .header p { margin: 2px 0 0 0; font-size: 9px; } .item { margin-bottom: 4px; } .label { font-weight: bold; font-size: 10px; display: block; } .value { display: block; font-size: 11px; margin-left: 4px; word-break: break-word; } .total { font-size: 13px; font-weight: bold; border-top: 1px dashed #000; padding-top: 6px; margin-top: 6px; text-align: right; } .footer { text-align: center; margin-top: 15px; font-size: 9px; padding-bottom: 15px; }</style></head><body><div class="ticket"><div class="header"><h2>BONILLA TOURS</h2><p>Comprobante de Pago</p></div><div class="item"><span class="label">Folio:</span> <span class="value">${item.folio}</span></div><div class="item"><span class="label">Fecha Compra:</span> <span class="value">${item.fechaCompleta}</span></div><div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="item"><span class="label">Teléfono:</span> <span class="value">${item.telefono}</span></div><div class="item"><span class="label">Ruta:</span> <span class="value">${item.origen} a ${item.destino}</span></div><div class="item"><span class="label">Concepto:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'S/A'}</span></div><div class="item"><span class="label">Método:</span> <span class="value">${item.metodoPago}</span></div><div class="total">TOTAL: $${Number(item.monto).toFixed(2)}</div><div class="footer"><p style="margin-bottom: 2px;">¡Gracias por su preferencia!</p><p style="margin-top:0;">Conserve este ticket</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
     printWindow.document.write(html); printWindow.document.close();
   };
 
@@ -717,7 +731,7 @@ export default function AdminDashboard() {
     
     const qrUrl = encodeURIComponent(`https://bonillawww.vercel.app/?folio=${item.id}`);
 
-    const html = `<!DOCTYPE html><html><head><title>Boleto ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .boleto { width: 58mm; padding: 2mm 2mm; box-sizing: border-box; } .text-center { text-align: center; } .text-bold { font-weight: bold; } .logo { max-width: 40mm; margin: 0 auto 5px; display: block; } .divider { border-bottom: 1px dashed #000; margin: 6px 0; } .item { margin-bottom: 4px; } .label { font-size: 9px; font-weight: bold; display: block; } .value { font-size: 11px; display: block; margin-left: 2px; word-break: break-word; } .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; } .dest-label { font-size: 9px; font-weight: bold; margin-bottom: 2px; } .dest-value { font-size: 13px; font-weight: bold; text-transform: uppercase; } .qr-container { text-align: center; margin: 8px 0; } .qr-code { width: 35mm; height: 35mm; margin: 0 auto; display: block; } .terms { font-size: 8px; text-align: left; margin-top: 8px; line-height: 1.1; } .terms h4 { font-size: 9px; text-align: center; margin: 0 0 4px 0; border-bottom: 1px solid #000; padding-bottom: 2px; } .terms p { margin: 2px 0; }</style></head><body><div class="boleto"><img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" /><div class="text-center text-bold" style="font-size: 12px;">BOLETO DE VIAJE</div><div class="divider"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="item"><span class="label">Teléfono:</span> <span class="value">${item.telefono}</span></div><div class="dest-box"><div class="dest-label">RUTA</div><div class="dest-value">${item.origen} ➔ ${item.destino}</div></div><div class="item"><span class="label">Fecha y Hora de Abordaje:</span> <span class="value">${item.fechaViaje} - ${item.horaViaje}</span></div><div class="item"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span></div><div class="item"><span class="label">Total Pagado:</span> <span class="value text-bold">$${Number(item.montoOriginal).toFixed(2)} MXN</span></div><div class="divider"></div><div class="qr-container"><img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}" alt="QR" /><div class="label" style="margin-top:4px;">Folio de Reserva</div><div class="text-bold" style="font-size: 13px;">${item.folio}</div><div style="font-size: 8px; margin-top: 4px;">Emitido: ${item.fechaCompra}</div></div><div class="divider"></div><div class="terms"><h4>TÉRMINOS Y CONDICIONES</h4><p>- Preséntese 20 min antes de su viaje.</p><p>- Muestre el QR o este ticket impreso para abordar.</p><p>- Tolerancia máx de 5 min en espera.</p><p>- Puntos de ascenso/descenso sujetos a cambios.</p><p>- Cancelaciones: 10% de cargo, mín. 1 hr en oficina.</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
+    const html = `<!DOCTYPE html><html><head><title>Boleto ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .boleto { width: 58mm; padding: 2mm 2mm; box-sizing: border-box; } .text-center { text-align: center; } .text-bold { font-weight: bold; } .logo { max-width: 40mm; margin: 0 auto 5px; display: block; } .divider { border-bottom: 1px dashed #000; margin: 6px 0; } .item { margin-bottom: 4px; } .label { font-size: 9px; font-weight: bold; display: block; } .value { font-size: 11px; display: block; margin-left: 2px; word-break: break-word; } .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; } .dest-label { font-size: 9px; font-weight: bold; margin-bottom: 2px; } .dest-value { font-size: 13px; font-weight: bold; text-transform: uppercase; } .qr-container { text-align: center; margin: 8px 0; } .qr-code { width: 35mm; height: 35mm; margin: 0 auto; display: block; } .terms { font-size: 8px; text-align: left; margin-top: 8px; line-height: 1.1; } .terms h4 { font-size: 9px; text-align: center; margin: 0 0 4px 0; border-bottom: 1px solid #000; padding-bottom: 2px; } .terms p { margin: 2px 0; }</style></head><body><div class="boleto"><img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" /><div class="text-center text-bold" style="font-size: 12px;">BOLETO DE VIAJE</div><div class="divider"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="item"><span class="label">Teléfono:</span> <span class="value">${item.telefono}</span></div><div class="dest-box"><div class="dest-label">RUTA</div><div class="dest-value">${item.origen} ➔ ${item.destino}</div></div><div class="item"><span class="label">Fecha y Hora de Abordaje:</span> <span class="value">${item.fechaViaje} - ${item.horaViaje}</span></div><div class="item"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span></div><div class="item"><span class="label">Total Pagado:</span> <span class="value text-bold">$${Number(item.montoOriginal).toFixed(2)} MXN</span></div><div class="divider"></div><div class="qr-container"><img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}" alt="QR" /><div class="label" style="margin-top:4px;">Folio de Reserva</div><div class="text-bold" style="font-size: 13px;">${item.folio}</div><div style="font-size: 8px; margin-top: 4px;">Emitido: ${item.fechaCompleta}</div></div><div class="divider"></div><div class="terms"><h4>TÉRMINOS Y CONDICIONES</h4><p>- Preséntese 20 min antes de su viaje.</p><p>- Muestre el QR o este ticket impreso para abordar.</p><p>- Tolerancia máx de 5 min en espera.</p><p>- Puntos de ascenso/descenso sujetos a cambios.</p><p>- Cancelaciones: 10% de cargo, mín. 1 hr en oficina.</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
     printWindow.document.write(html); printWindow.document.close();
   };
 
@@ -1099,7 +1113,7 @@ export default function AdminDashboard() {
                             <option value="entregado">🟢 Llegó a Destino</option>
                           </select>
                         </td>
-                        <td className="px-4 py-3 text-center flex justify-center">
+                        <td className="px-4 py-3 text-center flex justify-center gap-2">
                           <button 
                             onClick={() => printParcelTicket(p)} 
                             className="p-2 text-gray-600 hover:bg-orange-100 hover:text-orange-600 rounded-lg cursor-pointer transition-colors" 
@@ -1107,6 +1121,16 @@ export default function AdminDashboard() {
                           >
                             <Printer size={18} />
                           </button>
+                          {/* --- NUEVO BOTÓN: ELIMINAR PAQUETE (SOLO ADMIN) --- */}
+                          {userRole === 'admin' && (
+                            <button 
+                              onClick={() => handleDeleteParcel(p.id, p.folio)} 
+                              className="p-2 text-red-600 hover:bg-red-100 rounded-lg cursor-pointer transition-colors" 
+                              title="Eliminar Paquete"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -1212,9 +1236,11 @@ export default function AdminDashboard() {
                                   }} className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg cursor-pointer transition-colors" title="Editar Tipo de Viaje"><RefreshCw size={18} /></button>
                                 )}
 
-                                {userRole === 'admin' && (
+                                {/* --- MÉTODO DE PAGO ABIERTO A SUPERVISORES --- */}
+                                {(userRole === 'admin' || userRole === 'supervisor') && (
                                   <button onClick={() => { let currentMethod = 'efectivo'; if (item.metodoPago === 'Tarjeta') currentMethod = 'tarjeta'; if (item.metodoPago === 'Transferencia') currentMethod = 'transferencia'; if (item.metodoPago === 'Pendiente de Pago') currentMethod = 'pendiente de pago'; setEditingPayment({ id: item.id, folio: item.folio, method: currentMethod }); setShowEditPaymentModal(true); }} className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-lg cursor-pointer transition-colors" title="Editar Método de Pago"><CreditCard size={18} /></button>
                                 )}
+                                
                                 <button onClick={() => printTicket(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-gray-600 hover:bg-gray-200 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title="Imprimir Ticket"><Printer size={18} /></button>
                                 <button onClick={() => printBoleto(item)} disabled={item.status !== 'pagado'} className={`p-2 rounded-lg ${item.status === 'pagado' ? 'text-purple-600 hover:bg-purple-100 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`} title="Imprimir Boleto Abordaje"><Ticket size={18} /></button>
                                 
@@ -1457,3 +1483,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+

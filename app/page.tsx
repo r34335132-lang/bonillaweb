@@ -32,7 +32,7 @@ export default function AdminDashboard() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const [data, setData] = useState<any[]>([]);
-  const [parrels, setParcels] = useState<any[]>([]);
+  const [parcels, setParcels] = useState<any[]>([]);
   const [defaultPrices, setDefaultPrices] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);

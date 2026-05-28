@@ -100,11 +100,22 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     setIsClient(true);
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    
+    // Función para forzar el cierre de sesión al recargar o entrar a la página
+    const forceLogoutOnLoad = async () => {
+      // Cierra cualquier sesión que se haya quedado guardada en caché/local storage
+      await supabase.auth.signOut();
+      setSession(null);
       setAuthLoading(false);
+    };
+
+    forceLogoutOnLoad();
+
+    // Sigue escuchando los cambios de estado (para cuando inicien sesión manualmente)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    
     return () => subscription.unsubscribe();
   }, []);
 

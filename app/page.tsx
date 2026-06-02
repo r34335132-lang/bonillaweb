@@ -969,7 +969,7 @@ export default function AdminDashboard() {
   const balanceNeto = (ventasTotales + totalIngresosExtra) - totalGastos;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         <header className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
           <div>
@@ -986,7 +986,7 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        <div className="flex space-x-2 mb-6 bg-white p-2 rounded-xl border shadow-sm w-fit overflow-x-auto">
+        <div className="flex space-x-2 mb-6 bg-white p-2 rounded-xl border shadow-sm w-full overflow-x-auto whitespace-nowrap">
           <button onClick={() => setActiveTab('pagados')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'pagados' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Boletos Vendidos</button>
           <button onClick={() => setActiveTab('intentos')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'intentos' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Intentos / Pendientes</button>
           <button onClick={() => setActiveTab('viajes')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'viajes' ? 'bg-cyan-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Map size={18} /> Viajes / Manifiesto</button>
@@ -1024,7 +1024,7 @@ export default function AdminDashboard() {
             <div className="bg-white rounded-xl border shadow-sm p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><Ticket className="text-emerald-600" /> Buscar Viaje</h2>
               <form onSubmit={handleSearchTaquilla} className="space-y-4 mb-6">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Origen (Subida)</label>
                     <select value={taquillaForm.origin} onChange={e => setTaquillaForm({...taquillaForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">
@@ -1075,7 +1075,7 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto max-h-[400px]">
-                    <table className="w-full text-left text-sm">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
                       <thead className="bg-gray-50 text-gray-500 font-medium border-b sticky top-0">
                         <tr>
                           <th className="px-3 py-2">Folio Original</th>
@@ -1101,7 +1101,7 @@ export default function AdminDashboard() {
                                 setReturnTrips([]);
                                 setSelectedReturnTrip(null);
                                 setShowReturnModal(true);
-                              }} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1 rounded-lg text-xs font-bold transition-colors">
+                              }} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1 rounded-lg text-xs font-bold transition-colors w-full sm:w-auto">
                                 Programar Regreso
                               </button>
                             </td>
@@ -1181,7 +1181,7 @@ export default function AdminDashboard() {
                     </select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Nombre Pasajero</label>
                       <input type="text" required value={taquillaPassenger.name} onChange={e => setTaquillaPassenger({...taquillaPassenger, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" placeholder="Ej. Juan Pérez" />
@@ -1191,7 +1191,7 @@ export default function AdminDashboard() {
                       <input type="text" value={taquillaPassenger.phone} onChange={e => setTaquillaPassenger({...taquillaPassenger, phone: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" placeholder="10 dígitos" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Precio Unitario ($)</label>
                       <input type="number" required value={taquillaPassenger.priceOverride} onChange={e => setTaquillaPassenger({...taquillaPassenger, priceOverride: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-bold text-emerald-700 bg-white" />
@@ -1203,7 +1203,7 @@ export default function AdminDashboard() {
                     <input type="date" required value={taquillaSaleDate} onChange={e => setTaquillaSaleDate(e.target.value)} className="w-full border rounded-lg p-2 text-sm text-orange-900 bg-white border-orange-300" />
                   </div>
 
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mt-4 flex justify-between items-center">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mt-4 flex flex-col sm:flex-row justify-between items-center text-center sm:text-left gap-2">
                     <span className="font-bold text-emerald-800">Total a Cobrar:</span>
                     <span className="text-2xl font-black text-emerald-600">${(Number(taquillaPassenger.priceOverride) || 0) * taquillaSelectedSeats.length}</span>
                   </div>
@@ -1228,7 +1228,7 @@ export default function AdminDashboard() {
           ) : (
             <div className="space-y-6">
               {/* TARJETAS DE RESUMEN */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white p-6 rounded-xl border shadow-sm border-l-4 border-l-blue-500">
                   <div className="flex justify-between items-start">
                     <div>
@@ -1286,7 +1286,7 @@ export default function AdminDashboard() {
                   <form onSubmit={handleSaveFinanceRecord} className="space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-2">Tipo de Movimiento</label>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <button type="button" onClick={() => setFinanceForm({...financeForm, type: 'ingreso'})} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${financeForm.type === 'ingreso' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-gray-50 text-gray-500 border border-gray-200 hover:bg-gray-100'}`}>
                           + Ingreso Extra
                         </button>
@@ -1318,7 +1318,7 @@ export default function AdminDashboard() {
                     <h3 className="font-bold text-gray-800">Historial Financiero Manual</h3>
                   </div>
                   <div className="overflow-x-auto max-h-[400px]">
-                    <table className="w-full text-left text-sm">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
                       <thead className="bg-white text-gray-500 font-medium border-b sticky top-0">
                         <tr>
                           <th className="px-4 py-3">Fecha</th>
@@ -1384,7 +1384,7 @@ export default function AdminDashboard() {
               </form>
             </div>
             
-            <div className="bg-white rounded-xl border shadow-sm col-span-2 overflow-hidden">
+            <div className="bg-white rounded-xl border shadow-sm col-span-1 md:col-span-2 overflow-hidden">
               <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center"><h2 className="font-bold text-gray-800">Precios Globales Guardados</h2></div>
               <div className="overflow-x-auto max-h-[500px]">
                 <table className="w-full text-left text-sm whitespace-nowrap">
@@ -1415,15 +1415,15 @@ export default function AdminDashboard() {
               Solo necesitas configurar el horario de base a base. Los precios para cada parada se asignarán <strong>automáticamente</strong> consultando el Tarifario.
             </p>
             <form onSubmit={handleCreateTrip} className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-bold text-gray-700 mb-1">Sale desde</label><select value={tripForm.origin} onChange={e => setTripForm({...tripForm, origin: e.target.value})} className="w-full border rounded-lg p-2 bg-white text-gray-900">{BONILLA_ROUTE.map(city => <option key={city} value={city}>{city}</option>)}</select></div>
                 <div><label className="block text-sm font-bold text-gray-700 mb-1">Llega hasta</label><select value={tripForm.destination} onChange={(e) => setTripForm({...tripForm, destination: e.target.value})} className="w-full border rounded-lg p-2 bg-white text-gray-900">{BONILLA_ROUTE.map(city => <option key={city} value={city}>{city}</option>)}</select></div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-bold text-gray-700 mb-1">Fecha de Salida</label><input type="date" required value={tripForm.date} onChange={(e) => setTripForm({...tripForm, date: e.target.value})} className="w-full border rounded-lg p-2 bg-white text-gray-900" /></div>
                 <div><label className="block text-sm font-bold text-gray-700 mb-1">Hora de Salida</label><input type="time" required value={tripForm.departure_time} onChange={(e) => setTripForm({...tripForm, departure_time: e.target.value})} className="w-full border rounded-lg p-2 bg-white text-gray-900" /></div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-bold text-gray-700 mb-1">Nº Asientos del Camión</label><input type="number" required value={tripForm.total_seats} onChange={(e) => setTripForm({...tripForm, total_seats: e.target.value})} className="w-full border rounded-lg p-2 bg-white text-gray-900" /></div>
                 <div><label className="block text-sm font-bold text-gray-700 mb-1">Tipo de Autobús</label><input type="text" value={tripForm.bus_type} onChange={(e) => setTripForm({...tripForm, bus_type: e.target.value})} placeholder="Ej. Primera Clase" className="w-full border rounded-lg p-2 bg-white text-gray-900" /></div>
               </div>
@@ -1444,7 +1444,7 @@ export default function AdminDashboard() {
               <form onSubmit={handleCreateParcel} className="space-y-4">
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Remitente</label><input type="text" required value={parcelForm.sender} onChange={e => setParcelForm({...parcelForm, sender: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Destinatario</label><input type="text" required value={parcelForm.receiver} onChange={e => setParcelForm({...parcelForm, receiver: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <div className="flex-1"><label className="block text-xs font-bold text-gray-700 mb-1">Origen</label><select value={parcelForm.origin} onChange={e => setParcelForm({...parcelForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                   <div className="flex-1"><label className="block text-xs font-bold text-gray-700 mb-1">Destino</label><select value={parcelForm.destination} onChange={e => setParcelForm({...parcelForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                 </div>
@@ -1452,10 +1452,10 @@ export default function AdminDashboard() {
                 <button type="submit" disabled={isCreatingParcel} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg text-sm mt-2 transition-colors">{isCreatingParcel ? 'Guardando...' : 'Generar Folio'}</button>
               </form>
             </div>
-            <div className="bg-white rounded-xl border shadow-sm col-span-2 overflow-hidden">
+            <div className="bg-white rounded-xl border shadow-sm col-span-1 md:col-span-2 overflow-hidden">
               <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center"><h2 className="font-bold text-gray-800">Historial de Paquetes</h2></div>
               <div className="overflow-x-auto max-h-[500px]">
-                <table className="w-full text-left text-sm">
+                <table className="w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-white text-gray-500 font-medium border-b sticky top-0">
                     <tr>
                       <th className="px-4 py-3">Rastreo</th>
@@ -1542,17 +1542,17 @@ export default function AdminDashboard() {
         {/* --- VISTA: TABLAS DE BOLETOS VENDIDOS / PENDIENTES --- */}
         {(activeTab === 'pagados' || activeTab === 'intentos') && (
           <>
-            <div className="bg-white p-4 rounded-xl border shadow-sm mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="flex gap-4 items-center">
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="border rounded-lg px-3 py-2 text-sm text-gray-900 bg-white" />
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="border rounded-lg px-3 py-2 text-sm text-gray-900 bg-white" />
+            <div className="bg-white p-4 rounded-xl border shadow-sm mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center w-full md:w-auto">
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full sm:w-auto border rounded-lg px-3 py-2 text-sm text-gray-900 bg-white" />
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full sm:w-auto border rounded-lg px-3 py-2 text-sm text-gray-900 bg-white" />
                 <button onClick={() => { setStartDate(''); setEndDate(''); }} className="text-sm text-blue-600 font-bold underline">Ver Todo</button>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => setShowHistoryModal(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                <button onClick={() => setShowHistoryModal(true)} className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
                   <PlusCircle size={18} /> Registrar Venta Pasada
                 </button>
-                <button onClick={handleExportCSV} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">Exportar a Excel</button>
+                <button onClick={handleExportCSV} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-center">Exportar a Excel</button>
               </div>
             </div>
 
@@ -1672,12 +1672,12 @@ export default function AdminDashboard() {
         {/* --- MODAL PARA PROGRAMAR REGRESO (FECHA ABIERTA) --- */}
         {showReturnModal && selectedOpenTicket && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
-              <div className="bg-amber-600 px-6 py-4 flex justify-between items-center text-white">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="bg-amber-600 px-6 py-4 flex justify-between items-center text-white shrink-0">
                 <h3 className="font-bold text-lg flex items-center gap-2"><Clock /> Programar Regreso</h3>
                 <button onClick={() => setShowReturnModal(false)} className="text-amber-200 hover:text-white"><XCircle /></button>
               </div>
-              <div className="p-6 space-y-4">
+              <div className="p-6 space-y-4 overflow-y-auto">
                 <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
                   <p className="text-sm font-bold text-amber-900">Pasajero: {selectedOpenTicket.passenger_name}</p>
                   <p className="text-xs text-amber-700">Ruta de Regreso: <strong className="uppercase">{selectedOpenTicket.destination} ➔ {selectedOpenTicket.origin}</strong></p>
@@ -1737,7 +1737,7 @@ export default function AdminDashboard() {
                       <p className="text-xs text-gray-500 mt-2">Asientos seleccionados: {returnSelectedSeats.length === 0 ? 'Ninguno' : returnSelectedSeats.join(', ')}</p>
                     </div>
 
-                    <div className="pt-4 flex gap-3 border-t mt-4">
+                    <div className="pt-4 flex flex-col sm:flex-row gap-3 border-t mt-4">
                       <button type="button" onClick={() => setShowReturnModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
                       <button type="button" onClick={handleConfirmReturn} disabled={isSchedulingReturn || returnSelectedSeats.length === 0} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
                         {isSchedulingReturn ? 'Procesando...' : 'Confirmar Regreso'}
@@ -1753,12 +1753,12 @@ export default function AdminDashboard() {
         {/* --- MODAL PARA EDITAR HORA Y ASIENTO --- */}
         {showEditTripModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-              <div className="bg-fuchsia-600 px-6 py-4 flex justify-between items-center text-white">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="bg-fuchsia-600 px-6 py-4 flex justify-between items-center text-white shrink-0">
                 <h3 className="font-bold text-lg flex items-center gap-2"><CalendarDays /> Modificar Hora/Asiento</h3>
                 <button onClick={() => setShowEditTripModal(false)} className="text-fuchsia-200 hover:text-white"><XCircle /></button>
               </div>
-              <form onSubmit={handleUpdateTripData} className="p-6 space-y-4">
+              <form onSubmit={handleUpdateTripData} className="p-6 space-y-4 overflow-y-auto">
                 <p className="text-sm text-gray-600">Modificando datos del folio <strong className="text-gray-900">{editTripForm.folio}</strong></p>
 
                 <div>
@@ -1781,7 +1781,7 @@ export default function AdminDashboard() {
                   <input type="text" value={editTripForm.seats} onChange={e => setEditTripForm({...editTripForm, seats: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-semibold text-gray-900 bg-white" placeholder="Ej. 12, 13" />
                 </div>
 
-                <div className="pt-4 flex gap-3 border-t mt-6">
+                <div className="pt-4 flex flex-col sm:flex-row gap-3 border-t mt-6">
                   <button type="button" onClick={() => setShowEditTripModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
                   <button type="submit" disabled={isUpdatingTripData} className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold py-3 rounded-xl transition-colors">{isUpdatingTripData ? 'Guardando...' : 'Guardar'}</button>
                 </div>
@@ -1793,13 +1793,13 @@ export default function AdminDashboard() {
         {/* --- MODAL PARA VER DETALLES (EL OJO) --- */}
         {viewingBooking && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100">
-              <div className="bg-cyan-900 px-6 py-4 flex justify-between items-center text-white">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]">
+              <div className="bg-cyan-900 px-6 py-4 flex justify-between items-center text-white shrink-0">
                 <h3 className="font-bold text-lg flex items-center gap-2"><Eye /> Detalles del Boleto</h3>
                 <button onClick={() => setViewingBooking(null)} className="text-cyan-200 hover:text-white"><XCircle size={24} /></button>
               </div>
-              <div className="p-6 space-y-4 text-sm text-gray-800">
-                <div className="grid grid-cols-2 gap-4 border-b pb-4">
+              <div className="p-6 space-y-4 text-sm text-gray-800 overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b pb-4">
                   <div>
                     <span className="block text-xs font-bold text-gray-500 uppercase">Pasajero</span>
                     <span className="font-bold text-lg">{viewingBooking.cliente}</span>
@@ -1809,7 +1809,7 @@ export default function AdminDashboard() {
                     <span className="font-medium">{viewingBooking.telefono}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 border-b pb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b pb-4">
                   <div>
                     <span className="block text-xs font-bold text-gray-500 uppercase">Sube en (Origen)</span>
                     <span className="font-bold">{viewingBooking.origen}</span>
@@ -1819,7 +1819,7 @@ export default function AdminDashboard() {
                     <span className="font-bold">{viewingBooking.destino}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 border-b pb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b pb-4">
                   <div>
                     <span className="block text-xs font-bold text-gray-500 uppercase">Asiento(s) Reservados</span>
                     <span className="font-black text-cyan-700 text-lg">
@@ -1831,7 +1831,7 @@ export default function AdminDashboard() {
                     <span className="font-medium bg-gray-100 px-2 py-1 rounded">{viewingBooking.tipo}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 border-b pb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b pb-4">
                   <div>
                     <span className="block text-xs font-bold text-gray-500 uppercase">Folio de Compra</span>
                     <span className="font-mono text-gray-600">{viewingBooking.folio}</span>
@@ -1843,7 +1843,7 @@ export default function AdminDashboard() {
                     </span>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <span className="block text-xs font-bold text-gray-500 uppercase">Monto Neto a Entregar</span>
                     <span className="font-black text-emerald-600 text-xl">${Number(viewingBooking.monto).toLocaleString()} MXN</span>
@@ -1857,8 +1857,8 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-              <div className="px-6 py-4 bg-gray-50 flex justify-end">
-                <button onClick={() => setViewingBooking(null)} className="bg-gray-800 hover:bg-gray-900 text-white px-6 py-2 rounded-lg font-bold transition-colors">Cerrar Detalles</button>
+              <div className="px-6 py-4 bg-gray-50 flex justify-end shrink-0">
+                <button onClick={() => setViewingBooking(null)} className="w-full sm:w-auto bg-gray-800 hover:bg-gray-900 text-white px-6 py-2 rounded-lg font-bold transition-colors">Cerrar Detalles</button>
               </div>
             </div>
           </div>
@@ -1867,12 +1867,12 @@ export default function AdminDashboard() {
         {/* --- MODAL PARA EDITAR MÉTODO DE PAGO --- */}
         {showEditPaymentModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-              <div className="bg-yellow-600 px-6 py-4 flex justify-between items-center text-white">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="bg-yellow-600 px-6 py-4 flex justify-between items-center text-white shrink-0">
                 <h3 className="font-bold text-lg flex items-center gap-2"><CreditCard /> Editar Pago</h3>
                 <button onClick={() => setShowEditPaymentModal(false)} className="text-yellow-200 hover:text-white"><XCircle /></button>
               </div>
-              <form onSubmit={handleUpdatePaymentMethod} className="p-6 space-y-4">
+              <form onSubmit={handleUpdatePaymentMethod} className="p-6 space-y-4 overflow-y-auto">
                 <p className="text-sm text-gray-600">Modificando el método de pago para el folio <strong className="text-gray-900">{editingPayment.folio}</strong></p>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Nuevo Método</label>
@@ -1883,7 +1883,7 @@ export default function AdminDashboard() {
                     <option value="pendiente de pago">Pendiente de Pago</option>
                   </select>
                 </div>
-                <div className="pt-4 flex gap-3 border-t mt-6">
+                <div className="pt-4 flex flex-col sm:flex-row gap-3 border-t mt-6">
                   <button type="button" onClick={() => setShowEditPaymentModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
                   <button type="submit" disabled={isUpdatingPayment} className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-xl transition-colors">{isUpdatingPayment ? 'Guardando...' : 'Guardar Cambios'}</button>
                 </div>
@@ -1895,12 +1895,12 @@ export default function AdminDashboard() {
         {/* --- MODAL PARA EDITAR TIPO DE BOLETO --- */}
         {showEditTypeModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-              <div className="bg-blue-600 px-6 py-4 flex justify-between items-center text-white">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="bg-blue-600 px-6 py-4 flex justify-between items-center text-white shrink-0">
                 <h3 className="font-bold text-lg flex items-center gap-2"><RefreshCw /> Editar Tipo de Boleto</h3>
                 <button onClick={() => setShowEditTypeModal(false)} className="text-blue-200 hover:text-white"><XCircle /></button>
               </div>
-              <form onSubmit={handleUpdateTicketType} className="p-6 space-y-4">
+              <form onSubmit={handleUpdateTicketType} className="p-6 space-y-4 overflow-y-auto">
                 <p className="text-sm text-gray-600">Modificando el tipo de boleto para el folio <strong className="text-gray-900">{editingTicketType.folio}</strong></p>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Nuevo Tipo de Viaje</label>
@@ -1910,7 +1910,7 @@ export default function AdminDashboard() {
                     <option value="15_dias">Paquete 15 Días</option>
                   </select>
                 </div>
-                <div className="pt-4 flex gap-3 border-t mt-6">
+                <div className="pt-4 flex flex-col sm:flex-row gap-3 border-t mt-6">
                   <button type="button" onClick={() => setShowEditTypeModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
                   <button type="submit" disabled={isUpdatingType} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors">{isUpdatingType ? 'Guardando...' : 'Guardar Cambios'}</button>
                 </div>
@@ -1922,29 +1922,29 @@ export default function AdminDashboard() {
         {/* --- MODAL DE REGISTRO HISTÓRICO --- */}
         {showHistoryModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
-              <div className="bg-indigo-900 px-6 py-4 flex justify-between items-center text-white">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="bg-indigo-900 px-6 py-4 flex justify-between items-center text-white shrink-0">
                 <h3 className="font-bold text-lg flex items-center gap-2"><History /> Subir Boleto de Sistema Anterior</h3>
                 <button onClick={() => setShowHistoryModal(false)} className="text-indigo-200 hover:text-white"><XCircle /></button>
               </div>
-              <form onSubmit={handleSaveHistoricalBooking} className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleSaveHistoricalBooking} className="p-6 space-y-4 overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="block text-xs font-bold text-gray-700 mb-1">Fecha de la Venta</label><input type="date" required value={historyForm.saleDate} onChange={e => setHistoryForm({...historyForm, saleDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
                   <div><label className="block text-xs font-bold text-gray-700 mb-1">Fecha del Viaje (Ida)</label><input type="date" required value={historyForm.tripDate} onChange={e => setHistoryForm({...historyForm, tripDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" /></div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="block text-xs font-bold text-gray-700 mb-1">Origen</label><select value={historyForm.origin} onChange={e => setHistoryForm({...historyForm, origin: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                   <div><label className="block text-xs font-bold text-gray-700 mb-1">Destino</label><select value={historyForm.destination} onChange={e => setHistoryForm({...historyForm, destination: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">{BONILLA_ROUTE.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="col-span-2"><label className="block text-xs font-bold text-gray-700 mb-1">Nombre del Pasajero</label><input type="text" required value={historyForm.name} onChange={e => setHistoryForm({...historyForm, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" placeholder="Ej. María López" /></div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2"><label className="block text-xs font-bold text-gray-700 mb-1">Nombre del Pasajero</label><input type="text" required value={historyForm.name} onChange={e => setHistoryForm({...historyForm, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" placeholder="Ej. María López" /></div>
                   <div><label className="block text-xs font-bold text-gray-700 mb-1">Tipo de Boleto</label><select value={historyForm.tripType} onChange={e => setHistoryForm({...historyForm, tripType: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900"><option value="sencillo">Sencillo</option><option value="redondo">Redondo</option><option value="15_dias">15 Días</option></select></div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="block text-xs font-bold text-gray-700 mb-1">Total Pagado ($)</label><input type="number" required value={historyForm.price} onChange={e => setHistoryForm({...historyForm, price: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-bold text-green-700 bg-white" placeholder="Ej. 850" /></div>
                   <div><label className="block text-xs font-bold text-gray-700 mb-1">Asientos (Opcional)</label><input type="text" value={historyForm.seats} onChange={e => setHistoryForm({...historyForm, seats: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" placeholder="Ej. 12, 13" /></div>
                 </div>
-                <div className="pt-4 flex gap-3 border-t mt-6">
+                <div className="pt-4 flex flex-col sm:flex-row gap-3 border-t mt-6">
                   <button type="button" onClick={() => setShowHistoryModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
                   <button type="submit" disabled={isSavingHistory} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-colors">{isSavingHistory ? 'Guardando...' : 'Guardar Boleto Histórico'}</button>
                 </div>
@@ -1966,7 +1966,7 @@ export default function AdminDashboard() {
                 <button onClick={() => setManifestTrip(null)} className="text-cyan-200 hover:text-white p-1"><XCircle size={28} /></button>
               </div>
               
-              <div className="p-6 overflow-y-auto">
+              <div className="p-0 sm:p-6 overflow-y-auto">
                 {loadingManifest ? (
                   <div className="text-center py-10"><p className="text-gray-500 font-medium">Cargando lista de pasajeros...</p></div>
                 ) : manifestPassengers.length === 0 ? (
@@ -1975,35 +1975,37 @@ export default function AdminDashboard() {
                     <p className="text-gray-600 font-medium text-lg">Aún no hay boletos vendidos para este viaje.</p>
                   </div>
                 ) : (
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 text-gray-500 font-medium border-b sticky top-0">
-                      <tr><th className="px-4 py-3">Folio/Ref</th><th className="px-4 py-3">Nombre del Pasajero</th><th className="px-4 py-3 text-center">Asientos</th><th className="px-4 py-3 text-center">Estado</th><th className="px-4 py-3 text-center">Acción</th></tr>
-                    </thead>
-                    <tbody className="divide-y text-gray-800">
-                      {manifestPassengers.map(p => {
-                        const isBoarded = p.status === 'boarded';
-                        return (
-                          <tr key={p.id} className="hover:bg-cyan-50 transition-colors">
-                            <td className="px-4 py-4 font-mono font-bold text-gray-600">{p.booking_ref}</td>
-                            <td className="px-4 py-4">
-                              <span className="font-bold text-gray-900 block">{p.passenger_name}</span>
-                              <span className="text-xs text-gray-600 mt-1 block">📱 {p.passenger_phone || 'N/A'}</span>
-                              <span className="text-xs text-gray-400 block">Ruta: {p.origin} ➔ {p.destination}</span>
-                            </td>
-                            <td className="px-4 py-4 text-center font-bold">{p.seats.join(', ') || 'N/A'}</td>
-                            <td className="px-4 py-4 text-center">
-                              {isBoarded ? <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full text-xs font-black">ABORDÓ</span> : <span className="bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1 rounded-full text-xs font-black">PENDIENTE</span>}
-                            </td>
-                            <td className="px-4 py-4 text-center">
-                              {!isBoarded ? (
-                                <button onClick={() => handleManualBoarding(p.id, p.passenger_name)} className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95">DAR ACCESO</button>
-                              ) : <span className="text-gray-400 text-xs font-medium">—</span>}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead className="bg-gray-50 text-gray-500 font-medium border-b sticky top-0">
+                        <tr><th className="px-4 py-3">Folio/Ref</th><th className="px-4 py-3">Nombre del Pasajero</th><th className="px-4 py-3 text-center">Asientos</th><th className="px-4 py-3 text-center">Estado</th><th className="px-4 py-3 text-center">Acción</th></tr>
+                      </thead>
+                      <tbody className="divide-y text-gray-800">
+                        {manifestPassengers.map(p => {
+                          const isBoarded = p.status === 'boarded';
+                          return (
+                            <tr key={p.id} className="hover:bg-cyan-50 transition-colors">
+                              <td className="px-4 py-4 font-mono font-bold text-gray-600">{p.booking_ref}</td>
+                              <td className="px-4 py-4">
+                                <span className="font-bold text-gray-900 block">{p.passenger_name}</span>
+                                <span className="text-xs text-gray-600 mt-1 block">📱 {p.passenger_phone || 'N/A'}</span>
+                                <span className="text-xs text-gray-400 block">Ruta: {p.origin} ➔ {p.destination}</span>
+                              </td>
+                              <td className="px-4 py-4 text-center font-bold">{p.seats.join(', ') || 'N/A'}</td>
+                              <td className="px-4 py-4 text-center">
+                                {isBoarded ? <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full text-xs font-black">ABORDÓ</span> : <span className="bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1 rounded-full text-xs font-black">PENDIENTE</span>}
+                              </td>
+                              <td className="px-4 py-4 text-center">
+                                {!isBoarded ? (
+                                  <button onClick={() => handleManualBoarding(p.id, p.passenger_name)} className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95">DAR ACCESO</button>
+                                ) : <span className="text-gray-400 text-xs font-medium">—</span>}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </div>

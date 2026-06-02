@@ -69,6 +69,7 @@ export default function AdminDashboard() {
   const [taquillaSelectedSeats, setTaquillaSelectedSeats] = useState<number[]>([]);
   const [taquillaPassenger, setTaquillaPassenger] = useState({ name: '', phone: '', status: 'confirmed-efectivo', priceOverride: '', tripType: 'sencillo' });
   const [isSelling, setIsSelling] = useState(false);
+  const [taquillaOpenTickets, setTaquillaOpenTickets] = useState<any[]>([]);
 
   // --- ESTADOS: REGISTRO HISTÓRICO ---
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -95,15 +96,19 @@ export default function AdminDashboard() {
   const [editingTicketType, setEditingTicketType] = useState({ id: '', folio: '', tipoActual: 'sencillo', nuevoTipo: 'sencillo' });
   const [isUpdatingType, setIsUpdatingType] = useState(false);
 
-  // --- NUEVO ESTADO: VER DETALLES DEL BOLETO (EL OJO) ---
+  // --- ESTADOS: EDICIÓN DE HORA Y ASIENTO (NUEVO) ---
+  const [showEditTripModal, setShowEditTripModal] = useState(false);
+  const [editTripForm, setEditTripForm] = useState({ id: '', folio: '', date: '', tripId: '', seats: '' });
+  const [editAvailableTrips, setEditAvailableTrips] = useState<any[]>([]);
+  const [isUpdatingTripData, setIsUpdatingTripData] = useState(false);
+
+  // --- ESTADO: VER DETALLES DEL BOLETO (EL OJO) ---
   const [viewingBooking, setViewingBooking] = useState<any>(null);
 
   useEffect(() => {
     setIsClient(true);
     
-    // Función para forzar el cierre de sesión al recargar o entrar a la página
     const forceLogoutOnLoad = async () => {
-      // Cierra cualquier sesión que se haya quedado guardada en caché/local storage
       await supabase.auth.signOut();
       setSession(null);
       setAuthLoading(false);
@@ -111,7 +116,6 @@ export default function AdminDashboard() {
 
     forceLogoutOnLoad();
 
-    // Sigue escuchando los cambios de estado (para cuando inicien sesión manualmente)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
@@ -134,6 +138,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (activeTab === 'movimientos') fetchLogs();
     if (activeTab === 'viajes') fetchAllTrips();
+    if (activeTab === 'taquilla') fetchOpenTickets();
   }, [activeTab]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -161,6 +166,17 @@ export default function AdminDashboard() {
   const fetchAllTrips = async () => {
     const { data } = await supabase.from('trips').select('*').order('date', { ascending: false });
     if (data) setAllTrips(data);
+  };
+
+  const fetchOpenTickets = async () => {
+    const { data } = await supabase.from('bookings')
+      .select('id, booking_ref, passenger_name, passenger_phone, origin, destination, is_round_trip, is_15_days, created_at, trip:trips!bookings_trip_id_fkey(date)')
+      .or('is_round_trip.eq.true,is_15_days.eq.true')
+      .is('return_trip_id', null)
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (data) setTaquillaOpenTickets(data);
   };
 
   const fetchManifest = async (trip: any) => {
@@ -261,7 +277,6 @@ export default function AdminDashboard() {
     } catch (error: any) { alert("Error al eliminar la venta. Revisa las políticas RLS en Supabase: " + error.message); }
   };
 
-  // --- NUEVA FUNCIÓN PARA BORRAR PAQUETES ---
   const handleDeleteParcel = async (parcelId: string, folio: string) => {
     if (userRole !== 'admin') return alert("Solo los administradores pueden borrar paquetes.");
     if (!window.confirm(`¿Estás seguro de que deseas ELIMINAR el paquete PAQ-${folio}?`)) return;
@@ -307,6 +322,46 @@ export default function AdminDashboard() {
       setShowEditTypeModal(false);
       fetchRealData();
     } catch (error: any) { alert("Error al actualizar tipo de boleto: " + error.message); } finally { setIsUpdatingType(false); }
+  };
+
+  // --- NUEVA FUNCIÓN: ACTUALIZAR HORA Y ASIENTO ---
+  const handleEditTripDateChange = async (date: string) => {
+    setEditTripForm(prev => ({ ...prev, date, tripId: '' }));
+    if (date) {
+      const { data } = await supabase.from('trips').select('*').eq('date', date);
+      setEditAvailableTrips(data || []);
+    } else {
+      setEditAvailableTrips([]);
+    }
+  };
+
+  const handleUpdateTripData = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingTripData(true);
+    try {
+      let seatsArray: number[] = [];
+      if (editTripForm.seats.trim() !== '') {
+        seatsArray = editTripForm.seats.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+      }
+      
+      const updateData: any = { seats: seatsArray };
+      if (editTripForm.tripId) {
+        updateData.trip_id = editTripForm.tripId;
+      }
+      
+      // Asegurando el uso del comando UPDATE para no corromper la BD
+      const { error } = await supabase.from('bookings').update(updateData).eq('id', editTripForm.id);
+      
+      if (error) throw error;
+      await logAction('EDITAR_VIAJE_ASIENTO', `Modificó hora/asiento del folio ${editTripForm.folio}`);
+      alert("Hora y asiento actualizados correctamente.");
+      setShowEditTripModal(false);
+      fetchRealData();
+    } catch (err: any) { 
+      alert("Error al actualizar: " + err.message); 
+    } finally { 
+      setIsUpdatingTripData(false); 
+    }
   };
 
   const handleSaveHistoricalBooking = async (e: React.FormEvent) => {
@@ -554,6 +609,7 @@ export default function AdminDashboard() {
       setTaquillaReturnDate(''); 
       setTaquillaOpenReturn(false);
       fetchRealData();
+      if (activeTab === 'taquilla') fetchOpenTickets();
     } catch (err: any) { alert("Error: " + err.message); } finally { setIsSelling(false); }
   };
 
@@ -627,7 +683,6 @@ export default function AdminDashboard() {
     } catch (err: any) { alert("Error: " + err.message); } finally { setIsCreatingParcel(false); }
   };
 
-  // --- NUEVAS FUNCIONES PARA PAQUETERÍA ---
   const handleUpdateParcelStatus = async (parcelId: string, newStatus: string, folio: string) => {
     try {
       const { error } = await supabase.from('parcels').update({ status: newStatus }).eq('id', parcelId);
@@ -840,6 +895,49 @@ export default function AdminDashboard() {
               )}
             </div>
 
+            {/* SI NO HAY VIAJE SELECCIONADO: MOSTRAR BOLETOS ABIERTOS */}
+            {!taquillaSelectedTrip && (
+              <div className="bg-white rounded-xl border shadow-sm p-6 h-fit">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><Clock className="text-amber-500" /> Boletos con Fecha Abierta (Pendientes)</h2>
+                <p className="text-sm text-gray-500 mb-4">Estos son los boletos redondos o de 15 días que aún no han programado su viaje de regreso.</p>
+                
+                {taquillaOpenTickets.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed">
+                    <p className="text-sm text-gray-500 font-medium">No hay boletos abiertos pendientes.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto max-h-[400px]">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-gray-50 text-gray-500 font-medium border-b sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2">Folio Original</th>
+                          <th className="px-3 py-2">Pasajero</th>
+                          <th className="px-3 py-2">Ruta de Ida</th>
+                          <th className="px-3 py-2">Tipo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y text-gray-800">
+                        {taquillaOpenTickets.map((t: any) => (
+                          <tr key={t.id} className="hover:bg-amber-50 transition-colors">
+                            <td className="px-3 py-3 font-bold text-amber-700">{t.booking_ref}</td>
+                            <td className="px-3 py-3">
+                              <span className="block font-bold">{t.passenger_name}</span>
+                              <span className="text-xs text-gray-500">{t.passenger_phone || 'S/T'}</span>
+                            </td>
+                            <td className="px-3 py-3 text-xs">{t.origin} <br/>➔ {t.destination}</td>
+                            <td className="px-3 py-3 text-xs font-semibold">
+                              <span className="bg-gray-100 px-2 py-1 rounded">{t.is_15_days ? '15 Días' : 'Redondo'}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SI HAY VIAJE SELECCIONADO: MOSTRAR FORMULARIO DE VENTA */}
             {taquillaSelectedTrip && (
               <div className="bg-white rounded-xl border shadow-sm p-6">
                 <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Completar Venta</h2>
@@ -1085,7 +1183,6 @@ export default function AdminDashboard() {
                           <span className="block text-gray-500">Para: {p.receiver_name}</span>
                         </td>
                         <td className="px-4 py-3">
-                          {/* Input para confirmar/modificar precio real */}
                           <div className="flex items-center justify-end gap-1 mb-2">
                             <span className="text-gray-500 font-bold">$</span>
                             <input 
@@ -1096,7 +1193,6 @@ export default function AdminDashboard() {
                               title="Modificar precio"
                             />
                           </div>
-                          {/* Checkbox para Pagado / No Pagado */}
                           <label className="flex items-center justify-end gap-2 cursor-pointer bg-gray-50 p-1 rounded border">
                             <input 
                               type="checkbox" 
@@ -1131,7 +1227,6 @@ export default function AdminDashboard() {
                           >
                             <Printer size={18} />
                           </button>
-                          {/* --- NUEVO BOTÓN: ELIMINAR PAQUETE (SOLO ADMIN) --- */}
                           {userRole === 'admin' && (
                             <button 
                               onClick={() => handleDeleteParcel(p.id, p.folio)} 
@@ -1239,14 +1334,25 @@ export default function AdminDashboard() {
                                 )}
                                 
                                 {(userRole === 'admin' || userRole === 'supervisor') && (
-                                  <button onClick={() => { 
-                                    const tipoFormat = item.tipo === 'Viaje Redondo' ? 'redondo' : item.tipo === 'Paquete 15 Días' ? '15_dias' : 'sencillo';
-                                    setEditingTicketType({ id: item.id, folio: item.folio, tipoActual: tipoFormat, nuevoTipo: tipoFormat }); 
-                                    setShowEditTypeModal(true); 
-                                  }} className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg cursor-pointer transition-colors" title="Editar Tipo de Viaje"><RefreshCw size={18} /></button>
+                                  <>
+                                    <button onClick={() => { 
+                                      const tipoFormat = item.tipo === 'Viaje Redondo' ? 'redondo' : item.tipo === 'Paquete 15 Días' ? '15_dias' : 'sencillo';
+                                      setEditingTicketType({ id: item.id, folio: item.folio, tipoActual: tipoFormat, nuevoTipo: tipoFormat }); 
+                                      setShowEditTypeModal(true); 
+                                    }} className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg cursor-pointer transition-colors" title="Editar Tipo de Viaje"><RefreshCw size={18} /></button>
+
+                                    {/* BOTÓN EDITAR HORA Y ASIENTO */}
+                                    <button onClick={() => {
+                                      setEditTripForm({ id: item.id, folio: item.folio, date: item.fechaViaje !== 'Fecha por definir' ? item.fechaViaje : new Date().toISOString().split('T')[0], tripId: '', seats: item.asientos && item.asientos.length > 0 ? item.asientos.join(', ') : '' });
+                                      setEditAvailableTrips([]);
+                                      handleEditTripDateChange(item.fechaViaje !== 'Fecha por definir' ? item.fechaViaje : new Date().toISOString().split('T')[0]);
+                                      setShowEditTripModal(true);
+                                    }} className="p-2 text-fuchsia-600 hover:bg-fuchsia-100 rounded-lg cursor-pointer transition-colors" title="Modificar Hora y Asiento">
+                                      <CalendarDays size={18} />
+                                    </button>
+                                  </>
                                 )}
 
-                                {/* --- MÉTODO DE PAGO ABIERTO A SUPERVISORES --- */}
                                 {(userRole === 'admin' || userRole === 'supervisor') && (
                                   <button onClick={() => { let currentMethod = 'efectivo'; if (item.metodoPago === 'Tarjeta') currentMethod = 'tarjeta'; if (item.metodoPago === 'Transferencia') currentMethod = 'transferencia'; if (item.metodoPago === 'Pendiente de Pago') currentMethod = 'pendiente de pago'; setEditingPayment({ id: item.id, folio: item.folio, method: currentMethod }); setShowEditPaymentModal(true); }} className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-lg cursor-pointer transition-colors" title="Editar Método de Pago"><CreditCard size={18} /></button>
                                 )}
@@ -1268,6 +1374,46 @@ export default function AdminDashboard() {
               </div>
             </div>
           </>
+        )}
+
+        {/* --- MODAL PARA EDITAR HORA Y ASIENTO (NUEVO) --- */}
+        {showEditTripModal && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+              <div className="bg-fuchsia-600 px-6 py-4 flex justify-between items-center text-white">
+                <h3 className="font-bold text-lg flex items-center gap-2"><CalendarDays /> Modificar Hora/Asiento</h3>
+                <button onClick={() => setShowEditTripModal(false)} className="text-fuchsia-200 hover:text-white"><XCircle /></button>
+              </div>
+              <form onSubmit={handleUpdateTripData} className="p-6 space-y-4">
+                <p className="text-sm text-gray-600">Modificando datos del folio <strong className="text-gray-900">{editTripForm.folio}</strong></p>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Fecha del Viaje</label>
+                  <input type="date" required value={editTripForm.date} onChange={e => handleEditTripDateChange(e.target.value)} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Seleccionar Nueva Hora (Viaje)</label>
+                  <select value={editTripForm.tripId} onChange={e => setEditTripForm({...editTripForm, tripId: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900">
+                    <option value="">Mantener horario actual / Selecciona uno...</option>
+                    {editAvailableTrips.map(t => (
+                      <option key={t.id} value={t.id}>{t.departure_time} - {t.origin} a {t.destination}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Asientos (Separados por coma)</label>
+                  <input type="text" value={editTripForm.seats} onChange={e => setEditTripForm({...editTripForm, seats: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-semibold text-gray-900 bg-white" placeholder="Ej. 12, 13" />
+                </div>
+
+                <div className="pt-4 flex gap-3 border-t mt-6">
+                  <button type="button" onClick={() => setShowEditTripModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
+                  <button type="submit" disabled={isUpdatingTripData} className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold py-3 rounded-xl transition-colors">{isUpdatingTripData ? 'Guardando...' : 'Guardar'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
 
         {/* --- MODAL PARA VER DETALLES (EL OJO) --- */}

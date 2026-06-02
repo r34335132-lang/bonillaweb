@@ -136,7 +136,13 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (session) {
       const userEmail = session.user.email?.toLowerCase();
-      if (userEmail === 'admin@bonillatours.com' || userEmail?.includes('admin') || userEmail === 'contabilidadbonillatours@gmail.com') {
+      // AQUÍ AGREGAMOS EL CORREO NUEVO
+      if (
+        userEmail === 'admin@bonillatours.com' || 
+        userEmail?.includes('admin') || 
+        userEmail === 'contabilidadbonillatours@gmail.com' ||
+        userEmail === 'mary09g03@gmail.com'
+      ) {
         setUserRole('admin');
       } else {
         setUserRole('supervisor');

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase'; 
-import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare, History, Trash2, Map, Users, RefreshCw, Eye, BarChart3, TrendingUp, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare, History, Trash2, Map, Users, RefreshCw, Eye, BarChart3, TrendingUp, ArrowDownCircle, ArrowUpCircle, DollarSign } from 'lucide-react';
 
 type TabType = 'pagados' | 'intentos' | 'viajes' | 'taquilla' | 'crear-viaje' | 'paqueteria' | 'tarifario' | 'metricas';
 
@@ -34,6 +34,7 @@ export default function AdminDashboard() {
   const [data, setData] = useState<any[]>([]);
   const [parcels, setParcels] = useState<any[]>([]);
   const [defaultPrices, setDefaultPrices] = useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
   
@@ -175,6 +176,11 @@ export default function AdminDashboard() {
     try {
       await supabase.from('audit_logs').insert({ user_email: session.user.email, action, description });
     } catch (error) { console.error("Error guardando registro de auditoría:", error); }
+  };
+
+  const fetchLogs = async () => {
+    const { data } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(1500); 
+    if (data) setLogs(data);
   };
 
   const fetchAllTrips = async () => {

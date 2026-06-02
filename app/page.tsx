@@ -2,9 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase'; 
-import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare, History, Trash2, Map, Users, RefreshCw, Eye } from 'lucide-react';
+import { FileSpreadsheet, Printer, Bus, Package, CalendarDays, CheckCircle, Clock, XCircle, CreditCard, Banknote, Filter, PlusCircle, Box, Edit3, LogOut, Lock, Ticket, CheckSquare, History, Trash2, Map, Users, RefreshCw, Eye, BarChart3, TrendingUp, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 
-type TabType = 'pagados' | 'intentos' | 'viajes' | 'taquilla' | 'crear-viaje' | 'paqueteria' | 'tarifario' | 'movimientos';
+type TabType = 'pagados' | 'intentos' | 'viajes' | 'taquilla' | 'crear-viaje' | 'paqueteria' | 'tarifario' | 'metricas';
 
 const BONILLA_ROUTE = [
   "Durango", 
@@ -34,7 +34,6 @@ export default function AdminDashboard() {
   const [data, setData] = useState<any[]>([]);
   const [parcels, setParcels] = useState<any[]>([]);
   const [defaultPrices, setDefaultPrices] = useState<any[]>([]);
-  const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
   
@@ -71,6 +70,11 @@ export default function AdminDashboard() {
   const [isSelling, setIsSelling] = useState(false);
   const [taquillaOpenTickets, setTaquillaOpenTickets] = useState<any[]>([]);
 
+  // --- ESTADOS: FINANZAS Y MÉTRICAS (NUEVO) ---
+  const [financeRecords, setFinanceRecords] = useState<any[]>([]);
+  const [financeForm, setFinanceForm] = useState({ type: 'gasto', amount: '', description: '' });
+  const [isSavingFinance, setIsSavingFinance] = useState(false);
+
   // --- ESTADOS: REGISTRO HISTÓRICO ---
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isSavingHistory, setIsSavingHistory] = useState(false);
@@ -102,7 +106,7 @@ export default function AdminDashboard() {
   const [editAvailableTrips, setEditAvailableTrips] = useState<any[]>([]);
   const [isUpdatingTripData, setIsUpdatingTripData] = useState(false);
 
-  // --- ESTADOS: PROGRAMAR REGRESO DE FECHA ABIERTA (NUEVO) ---
+  // --- ESTADOS: PROGRAMAR REGRESO DE FECHA ABIERTA ---
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [selectedOpenTicket, setSelectedOpenTicket] = useState<any>(null);
   const [returnSearchDate, setReturnSearchDate] = useState('');
@@ -136,7 +140,6 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (session) {
       const userEmail = session.user.email?.toLowerCase();
-      // AQUÍ AGREGAMOS EL CORREO NUEVO
       if (
         userEmail === 'admin@bonillatours.com' || 
         userEmail?.includes('admin') || 
@@ -152,9 +155,9 @@ export default function AdminDashboard() {
   }, [session]);
 
   useEffect(() => {
-    if (activeTab === 'movimientos') fetchLogs();
     if (activeTab === 'viajes') fetchAllTrips();
     if (activeTab === 'taquilla') fetchOpenTickets();
+    if (activeTab === 'metricas') fetchRealData(); // Recarga datos financieros al entrar a métricas
   }, [activeTab]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -172,11 +175,6 @@ export default function AdminDashboard() {
     try {
       await supabase.from('audit_logs').insert({ user_email: session.user.email, action, description });
     } catch (error) { console.error("Error guardando registro de auditoría:", error); }
-  };
-
-  const fetchLogs = async () => {
-    const { data } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(1500); 
-    if (data) setLogs(data);
   };
 
   const fetchAllTrips = async () => {
@@ -217,7 +215,7 @@ export default function AdminDashboard() {
     try {
       const { data: bookingsData } = await supabase
         .from('bookings')
-        .select('id, booking_ref, folio, status, created_at, total_price, passenger_name, passenger_phone, is_round_trip, is_15_days, payment_method, origin, destination, seats, commission_amount, is_guest, trip:trips!bookings_trip_id_fkey(date, departure_time, arrival_time)') // AÑADIDO: arrival_time
+        .select('id, booking_ref, folio, status, created_at, total_price, passenger_name, passenger_phone, is_round_trip, is_15_days, payment_method, origin, destination, seats, commission_amount, is_guest, trip:trips!bookings_trip_id_fkey(date, departure_time, arrival_time)')
         .order('created_at', { ascending: false })
         .limit(1500);
 
@@ -242,7 +240,6 @@ export default function AdminDashboard() {
           if (b.is_15_days) tipoViaje = 'Paquete 15 Días';
           else if (b.is_round_trip) tipoViaje = 'Viaje Redondo';
 
-          // Manejo de comisiones
           let comision = b.commission_amount || (b.is_guest === false ? 100 : 0);
           let montoOriginal = b.total_price || 0;
           let montoNeto = montoOriginal - comision;
@@ -257,17 +254,53 @@ export default function AdminDashboard() {
             asientos: b.seats || [],
             fechaViaje: b.trip?.date || 'Fecha por definir',
             horaViaje: b.trip?.departure_time || 'Hora por definir',
-            horaLlegada: b.trip?.arrival_time || 'Por definir' // AÑADIDO: Mapeo de hora de llegada
+            horaLlegada: b.trip?.arrival_time || 'Por definir'
           };
         });
         setData(formateados);
       }
+      
       const { data: parcelsData } = await supabase.from('parcels').select('*').order('created_at', { ascending: false }).limit(1500);
       if (parcelsData) setParcels(parcelsData);
       
       const { data: pricesData } = await supabase.from('route_prices').select('*');
       if (pricesData) setDefaultPrices(pricesData);
+
+      // Traer registros financieros para la pestaña de métricas
+      const { data: financesData } = await supabase.from('financial_records').select('*').order('created_at', { ascending: false });
+      if (financesData) setFinanceRecords(financesData);
+
     } catch (err) { console.error("Error:", err); } finally { setLoading(false); }
+  };
+
+  const handleSaveFinanceRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (userRole !== 'admin') return alert("No tienes permisos.");
+    setIsSavingFinance(true);
+    try {
+      const { error } = await supabase.from('financial_records').insert({
+        type: financeForm.type,
+        amount: Number(financeForm.amount),
+        description: financeForm.description
+      });
+      if (error) throw error;
+      alert("Movimiento financiero registrado.");
+      setFinanceForm({ type: 'gasto', amount: '', description: '' });
+      fetchRealData();
+    } catch (err: any) {
+      alert("Error guardando el registro: " + err.message);
+    } finally {
+      setIsSavingFinance(false);
+    }
+  };
+
+  const handleDeleteFinanceRecord = async (id: string) => {
+    if (!window.confirm("¿Seguro que deseas eliminar este movimiento?")) return;
+    try {
+      const { error } = await supabase.from('financial_records').delete().eq('id', id);
+      if (error) throw error;
+      fetchRealData();
+    } catch (err: any) { alert("Error: " + err.message); }
   };
 
   const handleMarkAsPaid = async (bookingId: string, folio: string) => {
@@ -634,13 +667,11 @@ export default function AdminDashboard() {
     else setTaquillaSelectedSeats([...taquillaSelectedSeats, seat]);
   };
 
-  // --- NUEVAS FUNCIONES PARA PROGRAMAR BOLETOS ABIERTOS ---
   const handleSearchReturnTrips = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOpenTicket) return;
     const { data, error } = await supabase.from('trips').select('*').eq('date', returnSearchDate);
     if (data) {
-      // Invertimos origen y destino para el viaje de regreso
       const oIdx = BONILLA_ROUTE.indexOf(selectedOpenTicket.destination);
       const dIdx = BONILLA_ROUTE.indexOf(selectedOpenTicket.origin);
       if (oIdx === -1 || dIdx === -1 || oIdx === dIdx) return alert("Ruta inválida");
@@ -704,7 +735,6 @@ export default function AdminDashboard() {
     try {
       const returnBookingRef = "BT-R" + Math.floor(100000 + Math.random() * 900000).toString().slice(0, 5);
       
-      // Creamos el boleto de regreso
       const { data: returnBooking, error: err1 } = await supabase.from('bookings').insert({
         booking_ref: returnBookingRef,
         trip_id: selectedReturnTrip.id,
@@ -716,9 +746,9 @@ export default function AdminDashboard() {
         payment_method: 'efectivo',
         status: 'confirmed',
         is_guest: true,
-        total_price: 0, // El regreso en boleto abierto ya está pagado
-        origin: selectedOpenTicket.destination, // invertimos
-        destination: selectedOpenTicket.origin,   // invertimos
+        total_price: 0, 
+        origin: selectedOpenTicket.destination, 
+        destination: selectedOpenTicket.origin,   
         is_round_trip: selectedOpenTicket.is_round_trip,
         is_15_days: selectedOpenTicket.is_15_days,
         created_at: new Date().toISOString()
@@ -726,7 +756,6 @@ export default function AdminDashboard() {
 
       if (err1) throw err1;
 
-      // Actualizamos el boleto original enlazando al Trip de regreso
       const { error: err2 } = await supabase.from('bookings').update({ return_trip_id: selectedReturnTrip.id }).eq('id', selectedOpenTicket.id);
       if (err2) throw err2;
 
@@ -923,6 +952,16 @@ export default function AdminDashboard() {
     printWindow.document.write(html); printWindow.document.close();
   };
 
+  // --- CÁLCULOS FINANCIEROS PARA MÉTRICAS ---
+  const totalBoletosPagados = data.filter(i => i.status === 'pagado').reduce((acc, curr) => acc + Number(curr.monto), 0);
+  const totalPaquetesPagados = parcels.filter(p => p.is_paid).reduce((acc, curr) => acc + Number(curr.price), 0);
+  const ventasTotales = totalBoletosPagados + totalPaquetesPagados;
+  
+  const totalIngresosExtra = financeRecords.filter(r => r.type === 'ingreso').reduce((acc, curr) => acc + Number(curr.amount), 0);
+  const totalGastos = financeRecords.filter(r => r.type === 'gasto').reduce((acc, curr) => acc + Number(curr.amount), 0);
+  
+  const balanceNeto = (ventasTotales + totalIngresosExtra) - totalGastos;
+
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto">
@@ -949,7 +988,7 @@ export default function AdminDashboard() {
           <button onClick={() => setActiveTab('paqueteria')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'paqueteria' ? 'bg-orange-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Package size={18} /> Paquetería</button>
           <button onClick={() => setActiveTab('crear-viaje')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'crear-viaje' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><PlusCircle size={18} /> Programar Viaje</button>
           <button onClick={() => setActiveTab('tarifario')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'tarifario' ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><Edit3 size={18} /> Tarifario</button>
-          <button onClick={() => setActiveTab('movimientos')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'movimientos' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><History size={18} /> Movimientos</button>
+          <button onClick={() => setActiveTab('metricas')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'metricas' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}><BarChart3 size={18} /> Métricas y Finanzas</button>
         </div>
 
         {/* --- VISTA: VIAJES Y MANIFIESTO --- */}
@@ -1172,34 +1211,150 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* --- VISTA: HISTORIAL DE MOVIMIENTOS --- */}
-        {activeTab === 'movimientos' && (
-          <div className="bg-white rounded-xl border shadow-sm overflow-hidden max-w-6xl mx-auto">
-            <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
-              <h2 className="font-bold text-gray-800 flex items-center gap-2"><History className="text-indigo-600"/> Historial de Movimientos</h2>
+        {/* --- VISTA: MÉTRICAS Y FINANZAS (ADMIN ONLY) --- */}
+        {activeTab === 'metricas' && (
+          userRole !== 'admin' ? (
+            <div className="bg-white rounded-xl border shadow-sm p-12 text-center max-w-lg mx-auto mt-10">
+              <Lock className="mx-auto text-gray-300 mb-4" size={56} />
+              <h2 className="text-2xl font-black text-gray-800">Acceso Restringido</h2>
+              <p className="text-gray-500 mt-2">Esta sección contiene información financiera confidencial. Solo los administradores autorizados pueden visualizarla.</p>
             </div>
-            <div className="overflow-x-auto max-h-[600px]">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-white text-gray-500 font-medium border-b sticky top-0">
-                  <tr><th className="px-6 py-4">Fecha / Hora</th><th className="px-6 py-4">Usuario Responsable</th><th className="px-6 py-4">Acción</th><th className="px-6 py-4">Detalles</th></tr>
-                </thead>
-                <tbody className="divide-y text-gray-800">
-                  {logs.length === 0 ? (
-                    <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No hay movimientos.</td></tr>
-                  ) : (
-                    logs.map((log: any) => (
-                      <tr key={log.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-500">{new Date(log.created_at).toLocaleString()}</td>
-                        <td className="px-6 py-4 font-bold">{log.user_email}</td>
-                        <td className="px-6 py-4"><span className={`px-3 py-1 rounded-full text-xs font-bold ${log.action.includes('BORRAR') ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{log.action}</span></td>
-                        <td className="px-6 py-4">{log.description}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          ) : (
+            <div className="space-y-6">
+              {/* TARJETAS DE RESUMEN */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white p-6 rounded-xl border shadow-sm border-l-4 border-l-blue-500">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Ventas del Sistema</p>
+                      <h3 className="text-2xl font-black text-gray-900 mt-1">${ventasTotales.toLocaleString()}</h3>
+                    </div>
+                    <div className="bg-blue-100 p-2 rounded-lg"><Ticket className="text-blue-600" size={24}/></div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">Boletos y Paquetería pagados</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl border shadow-sm border-l-4 border-l-emerald-500">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Ingresos Extra</p>
+                      <h3 className="text-2xl font-black text-gray-900 mt-1">${totalIngresosExtra.toLocaleString()}</h3>
+                    </div>
+                    <div className="bg-emerald-100 p-2 rounded-lg"><ArrowUpCircle className="text-emerald-600" size={24}/></div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">Otros ingresos registrados</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl border shadow-sm border-l-4 border-l-red-500">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Gastos Operativos</p>
+                      <h3 className="text-2xl font-black text-gray-900 mt-1">${totalGastos.toLocaleString()}</h3>
+                    </div>
+                    <div className="bg-red-100 p-2 rounded-lg"><ArrowDownCircle className="text-red-600" size={24}/></div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">Casetas, diésel, viáticos, etc.</p>
+                </div>
+
+                <div className="bg-gray-900 p-6 rounded-xl shadow-lg border border-gray-800">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">Balance Neto</p>
+                      <h3 className={`text-3xl font-black mt-1 ${balanceNeto >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        ${balanceNeto.toLocaleString()}
+                      </h3>
+                    </div>
+                    <div className="bg-gray-800 p-2 rounded-lg"><Banknote className="text-white" size={24}/></div>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">Ganancia libre calculada</p>
+                </div>
+              </div>
+
+              {/* PANEL DE CONTROL FINANCIERO */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* FORMULARIO DE GASTOS / INGRESOS */}
+                <div className="bg-white rounded-xl border shadow-sm p-6 lg:col-span-1 h-fit">
+                  <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2 mb-4"><DollarSign size={20} className="text-indigo-600"/> Nuevo Movimiento</h3>
+                  
+                  <form onSubmit={handleSaveFinanceRecord} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-2">Tipo de Movimiento</label>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setFinanceForm({...financeForm, type: 'ingreso'})} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${financeForm.type === 'ingreso' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-gray-50 text-gray-500 border border-gray-200 hover:bg-gray-100'}`}>
+                          + Ingreso Extra
+                        </button>
+                        <button type="button" onClick={() => setFinanceForm({...financeForm, type: 'gasto'})} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${financeForm.type === 'gasto' ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-gray-50 text-gray-500 border border-gray-200 hover:bg-gray-100'}`}>
+                          - Gasto
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Monto ($)</label>
+                      <input type="number" required value={financeForm.amount} onChange={e => setFinanceForm({...financeForm, amount: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900 font-bold" placeholder="0.00" />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Concepto / Descripción</label>
+                      <input type="text" required value={financeForm.description} onChange={e => setFinanceForm({...financeForm, description: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" placeholder="Ej. Pago de caseta Durango" />
+                    </div>
+
+                    <button type="submit" disabled={isSavingFinance} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg text-sm transition-colors mt-2">
+                      {isSavingFinance ? 'Guardando...' : 'Registrar Movimiento'}
+                    </button>
+                  </form>
+                </div>
+
+                {/* TABLA DE HISTORIAL FINANCIERO */}
+                <div className="bg-white rounded-xl border shadow-sm lg:col-span-2 overflow-hidden">
+                  <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center">
+                    <h3 className="font-bold text-gray-800">Historial Financiero Manual</h3>
+                  </div>
+                  <div className="overflow-x-auto max-h-[400px]">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-white text-gray-500 font-medium border-b sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3">Fecha</th>
+                          <th className="px-4 py-3">Tipo</th>
+                          <th className="px-4 py-3">Concepto</th>
+                          <th className="px-4 py-3 text-right">Monto</th>
+                          <th className="px-4 py-3 text-center">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y text-gray-800">
+                        {financeRecords.length === 0 ? (
+                          <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">No hay movimientos registrados.</td></tr>
+                        ) : (
+                          financeRecords.map((r: any) => (
+                            <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3 text-xs text-gray-500">{new Date(r.created_at).toLocaleString()}</td>
+                              <td className="px-4 py-3">
+                                {r.type === 'ingreso' 
+                                  ? <span className="bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs font-bold flex items-center gap-1 w-fit"><ArrowUpCircle size={12}/> Ingreso</span>
+                                  : <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-bold flex items-center gap-1 w-fit"><ArrowDownCircle size={12}/> Gasto</span>
+                                }
+                              </td>
+                              <td className="px-4 py-3 font-medium text-gray-700">{r.description}</td>
+                              <td className={`px-4 py-3 text-right font-black ${r.type === 'ingreso' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {r.type === 'ingreso' ? '+' : '-'}${Number(r.amount).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <button onClick={() => handleDeleteFinanceRecord(r.id)} className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
             </div>
-          </div>
+          )
         )}
 
         {/* --- VISTA: TARIFARIO --- */}

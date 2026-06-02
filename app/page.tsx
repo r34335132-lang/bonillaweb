@@ -96,11 +96,21 @@ export default function AdminDashboard() {
   const [editingTicketType, setEditingTicketType] = useState({ id: '', folio: '', tipoActual: 'sencillo', nuevoTipo: 'sencillo' });
   const [isUpdatingType, setIsUpdatingType] = useState(false);
 
-  // --- ESTADOS: EDICIÓN DE HORA Y ASIENTO (NUEVO) ---
+  // --- ESTADOS: EDICIÓN DE HORA Y ASIENTO ---
   const [showEditTripModal, setShowEditTripModal] = useState(false);
   const [editTripForm, setEditTripForm] = useState({ id: '', folio: '', date: '', tripId: '', seats: '' });
   const [editAvailableTrips, setEditAvailableTrips] = useState<any[]>([]);
   const [isUpdatingTripData, setIsUpdatingTripData] = useState(false);
+
+  // --- ESTADOS: PROGRAMAR REGRESO DE FECHA ABIERTA (NUEVO) ---
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [selectedOpenTicket, setSelectedOpenTicket] = useState<any>(null);
+  const [returnSearchDate, setReturnSearchDate] = useState('');
+  const [returnTrips, setReturnTrips] = useState<any[]>([]);
+  const [selectedReturnTrip, setSelectedReturnTrip] = useState<any>(null);
+  const [returnOccupiedSeats, setReturnOccupiedSeats] = useState<number[]>([]);
+  const [returnSelectedSeats, setReturnSelectedSeats] = useState<number[]>([]);
+  const [isSchedulingReturn, setIsSchedulingReturn] = useState(false);
 
   // --- ESTADO: VER DETALLES DEL BOLETO (EL OJO) ---
   const [viewingBooking, setViewingBooking] = useState<any>(null);
@@ -201,7 +211,7 @@ export default function AdminDashboard() {
     try {
       const { data: bookingsData } = await supabase
         .from('bookings')
-        .select('id, booking_ref, folio, status, created_at, total_price, passenger_name, passenger_phone, is_round_trip, is_15_days, payment_method, origin, destination, seats, commission_amount, is_guest, trip:trips!bookings_trip_id_fkey(date, departure_time)')
+        .select('id, booking_ref, folio, status, created_at, total_price, passenger_name, passenger_phone, is_round_trip, is_15_days, payment_method, origin, destination, seats, commission_amount, is_guest, trip:trips!bookings_trip_id_fkey(date, departure_time, arrival_time)') // AÑADIDO: arrival_time
         .order('created_at', { ascending: false })
         .limit(1500);
 
@@ -240,7 +250,8 @@ export default function AdminDashboard() {
             origen: b.origin || 'N/A', destino: b.destination || 'N/A',
             asientos: b.seats || [],
             fechaViaje: b.trip?.date || 'Fecha por definir',
-            horaViaje: b.trip?.departure_time || 'Hora por definir'
+            horaViaje: b.trip?.departure_time || 'Hora por definir',
+            horaLlegada: b.trip?.arrival_time || 'Por definir' // AÑADIDO: Mapeo de hora de llegada
           };
         });
         setData(formateados);
@@ -324,7 +335,6 @@ export default function AdminDashboard() {
     } catch (error: any) { alert("Error al actualizar tipo de boleto: " + error.message); } finally { setIsUpdatingType(false); }
   };
 
-  // --- NUEVA FUNCIÓN: ACTUALIZAR HORA Y ASIENTO ---
   const handleEditTripDateChange = async (date: string) => {
     setEditTripForm(prev => ({ ...prev, date, tripId: '' }));
     if (date) {
@@ -349,7 +359,6 @@ export default function AdminDashboard() {
         updateData.trip_id = editTripForm.tripId;
       }
       
-      // Asegurando el uso del comando UPDATE para no corromper la BD
       const { error } = await supabase.from('bookings').update(updateData).eq('id', editTripForm.id);
       
       if (error) throw error;
@@ -580,7 +589,7 @@ export default function AdminDashboard() {
               booking_ref: returnBookingRef,
               trip_id: returnTripId,
               user_id: null,
-              seats: taquillaSelectedSeats,
+              seats: taquillaSelectedSeats, // Ojo, esto copia los asientos para el regreso, sujeto a disponibilidad real
               passenger_name: taquillaPassenger.name,
               passenger_email: 'taquilla@bonillatours.com',
               passenger_phone: taquillaPassenger.phone || '0000000000',
@@ -617,6 +626,114 @@ export default function AdminDashboard() {
     if (taquillaOccupiedSeats.includes(seat)) return;
     if (taquillaSelectedSeats.includes(seat)) setTaquillaSelectedSeats(taquillaSelectedSeats.filter(s => s !== seat));
     else setTaquillaSelectedSeats([...taquillaSelectedSeats, seat]);
+  };
+
+  // --- NUEVAS FUNCIONES PARA PROGRAMAR BOLETOS ABIERTOS ---
+  const handleSearchReturnTrips = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOpenTicket) return;
+    const { data, error } = await supabase.from('trips').select('*').eq('date', returnSearchDate);
+    if (data) {
+      // Invertimos origen y destino para el viaje de regreso
+      const oIdx = BONILLA_ROUTE.indexOf(selectedOpenTicket.destination);
+      const dIdx = BONILLA_ROUTE.indexOf(selectedOpenTicket.origin);
+      if (oIdx === -1 || dIdx === -1 || oIdx === dIdx) return alert("Ruta inválida");
+
+      const isGoingSouth = oIdx < dIdx;
+      
+      const valid = data.filter((t: any) => {
+        const tStart = BONILLA_ROUTE.indexOf(t.origin?.trim());
+        const tEnd = BONILLA_ROUTE.indexOf(t.destination?.trim());
+        if (tStart === -1 || tEnd === -1) return false;
+        
+        const tripGoesSouth = tStart < tEnd;
+        if (isGoingSouth !== tripGoesSouth) return false; 
+
+        if (isGoingSouth) return tStart <= oIdx && tEnd >= dIdx;
+        else return tStart >= oIdx && tEnd <= dIdx;
+      });
+      setReturnTrips(valid);
+      setSelectedReturnTrip(null);
+    }
+  };
+
+  const handleSelectReturnTrip = async (trip: any) => {
+    const { data: bData } = await supabase.from('bookings').select('seats, origin, destination').eq('trip_id', trip.id).neq('status', 'cancelled');
+    
+    let occupied: number[] = [];
+    if (bData) {
+      const oIdx = BONILLA_ROUTE.indexOf(selectedOpenTicket.destination);
+      const dIdx = BONILLA_ROUTE.indexOf(selectedOpenTicket.origin);
+      const isGoingSouth = oIdx < dIdx;
+      
+      bData.forEach((b: any) => {
+        const bStart = BONILLA_ROUTE.indexOf(b.origin?.trim());
+        const bEnd = BONILLA_ROUTE.indexOf(b.destination?.trim());
+        if (bStart === -1 || bEnd === -1) return;
+
+        const bookingGoingSouth = bStart < bEnd;
+        if (isGoingSouth === bookingGoingSouth) {
+          if (isGoingSouth) {
+            if (bStart < dIdx && bEnd > oIdx) occupied.push(...b.seats);
+          } else {
+            if (bStart > dIdx && bEnd < oIdx) occupied.push(...b.seats);
+          }
+        }
+      });
+    }
+    setReturnOccupiedSeats(Array.from(new Set(occupied)));
+    setReturnSelectedSeats([]);
+    setSelectedReturnTrip(trip);
+  };
+
+  const toggleReturnSeat = (seat: number) => {
+    if (returnOccupiedSeats.includes(seat)) return;
+    if (returnSelectedSeats.includes(seat)) setReturnSelectedSeats(returnSelectedSeats.filter(s => s !== seat));
+    else setReturnSelectedSeats([...returnSelectedSeats, seat]);
+  };
+
+  const handleConfirmReturn = async () => {
+    if (returnSelectedSeats.length === 0) return alert("Selecciona al menos un asiento para el regreso.");
+    setIsSchedulingReturn(true);
+    try {
+      const returnBookingRef = "BT-R" + Math.floor(100000 + Math.random() * 900000).toString().slice(0, 5);
+      
+      // Creamos el boleto de regreso
+      const { data: returnBooking, error: err1 } = await supabase.from('bookings').insert({
+        booking_ref: returnBookingRef,
+        trip_id: selectedReturnTrip.id,
+        user_id: null,
+        seats: returnSelectedSeats,
+        passenger_name: selectedOpenTicket.passenger_name,
+        passenger_email: 'taquilla@bonillatours.com',
+        passenger_phone: selectedOpenTicket.passenger_phone || '0000000000',
+        payment_method: 'efectivo',
+        status: 'confirmed',
+        is_guest: true,
+        total_price: 0, // El regreso en boleto abierto ya está pagado
+        origin: selectedOpenTicket.destination, // invertimos
+        destination: selectedOpenTicket.origin,   // invertimos
+        is_round_trip: selectedOpenTicket.is_round_trip,
+        is_15_days: selectedOpenTicket.is_15_days,
+        created_at: new Date().toISOString()
+      }).select('id').single();
+
+      if (err1) throw err1;
+
+      // Actualizamos el boleto original enlazando al Trip de regreso
+      const { error: err2 } = await supabase.from('bookings').update({ return_trip_id: selectedReturnTrip.id }).eq('id', selectedOpenTicket.id);
+      if (err2) throw err2;
+
+      await logAction('PROGRAMAR_REGRESO', `Programó regreso para ${selectedOpenTicket.passenger_name} folio original ${selectedOpenTicket.booking_ref}`);
+      alert(`¡Regreso programado! Folio de regreso generado: ${returnBookingRef}`);
+      setShowReturnModal(false);
+      fetchOpenTickets();
+      fetchRealData();
+    } catch (err: any) { 
+      alert("Error al programar regreso: " + err.message); 
+    } finally { 
+      setIsSchedulingReturn(false); 
+    }
   };
 
   const handleSavePrice = async (e: React.FormEvent) => {
@@ -770,8 +887,8 @@ export default function AdminDashboard() {
   const datosAgrupados = agruparPorMes(finalFilteredData);
 
   const handleExportCSV = () => {
-    const headers = "Folio,Estado,Concepto,Origen,Destino,Pasajero,Método de Pago,Fecha/Hora Compra,Fecha/Hora Abordaje,Monto\n";
-    const rows = finalFilteredData.map((item: any) => `${item.folio},${item.status},${item.tipo},"${item.origen}","${item.destino}","${item.cliente}",${item.metodoPago},"${item.fechaCompleta}","${item.fechaViaje} ${item.horaViaje}",${item.monto}`).join("\n");
+    const headers = "Folio,Estado,Concepto,Origen,Destino,Pasajero,Método de Pago,Fecha/Hora Compra,Hora Llegada,Monto\n";
+    const rows = finalFilteredData.map((item: any) => `${item.folio},${item.status},${item.tipo},"${item.origen}","${item.destino}","${item.cliente}",${item.metodoPago},"${item.fechaCompleta}","${item.fechaViaje} ${item.horaLlegada}",${item.monto}`).join("\n");
     const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(headers + rows);
     const link = document.createElement("a");
     link.setAttribute("href", csvContent);
@@ -796,7 +913,7 @@ export default function AdminDashboard() {
     
     const qrUrl = encodeURIComponent(`https://bonillawww.vercel.app/?folio=${item.id}`);
 
-    const html = `<!DOCTYPE html><html><head><title>Boleto ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .boleto { width: 58mm; padding: 2mm 2mm; box-sizing: border-box; } .text-center { text-align: center; } .text-bold { font-weight: bold; } .logo { max-width: 40mm; margin: 0 auto 5px; display: block; } .divider { border-bottom: 1px dashed #000; margin: 6px 0; } .item { margin-bottom: 4px; } .label { font-size: 9px; font-weight: bold; display: block; } .value { font-size: 11px; display: block; margin-left: 2px; word-break: break-word; } .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; } .dest-label { font-size: 9px; font-weight: bold; margin-bottom: 2px; } .dest-value { font-size: 13px; font-weight: bold; text-transform: uppercase; } .qr-container { text-align: center; margin: 8px 0; } .qr-code { width: 35mm; height: 35mm; margin: 0 auto; display: block; } .terms { font-size: 8px; text-align: left; margin-top: 8px; line-height: 1.1; } .terms h4 { font-size: 9px; text-align: center; margin: 0 0 4px 0; border-bottom: 1px solid #000; padding-bottom: 2px; } .terms p { margin: 2px 0; }</style></head><body><div class="boleto"><img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" /><div class="text-center text-bold" style="font-size: 12px;">BOLETO DE VIAJE</div><div class="divider"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="item"><span class="label">Teléfono:</span> <span class="value">${item.telefono}</span></div><div class="dest-box"><div class="dest-label">RUTA</div><div class="dest-value">${item.origen} ➔ ${item.destino}</div></div><div class="item"><span class="label">Fecha y Hora de Abordaje:</span> <span class="value">${item.fechaViaje} - ${item.horaViaje}</span></div><div class="item"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span></div><div class="item"><span class="label">Total Pagado:</span> <span class="value text-bold">$${Number(item.montoOriginal).toFixed(2)} MXN</span></div><div class="divider"></div><div class="qr-container"><img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}" alt="QR" /><div class="label" style="margin-top:4px;">Folio de Reserva</div><div class="text-bold" style="font-size: 13px;">${item.folio}</div><div style="font-size: 8px; margin-top: 4px;">Emitido: ${item.fechaCompleta}</div></div><div class="divider"></div><div class="terms"><h4>TÉRMINOS Y CONDICIONES</h4><p>- Preséntese 20 min antes de su viaje.</p><p>- Muestre el QR o este ticket impreso para abordar.</p><p>- Tolerancia máx de 5 min en espera.</p><p>- Puntos de ascenso/descenso sujetos a cambios.</p><p>- Cancelaciones: 10% de cargo, mín. 1 hr en oficina.</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
+    const html = `<!DOCTYPE html><html><head><title>Boleto ${item.folio}</title><style>@page { size: 58mm auto; margin: 0mm; } body { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 0 !important; background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; } .boleto { width: 58mm; padding: 2mm 2mm; box-sizing: border-box; } .text-center { text-align: center; } .text-bold { font-weight: bold; } .logo { max-width: 40mm; margin: 0 auto 5px; display: block; } .divider { border-bottom: 1px dashed #000; margin: 6px 0; } .item { margin-bottom: 4px; } .label { font-size: 9px; font-weight: bold; display: block; } .value { font-size: 11px; display: block; margin-left: 2px; word-break: break-word; } .dest-box { border: 1px solid #000; padding: 4px; text-align: center; margin: 6px 0; } .dest-label { font-size: 9px; font-weight: bold; margin-bottom: 2px; } .dest-value { font-size: 13px; font-weight: bold; text-transform: uppercase; } .qr-container { text-align: center; margin: 8px 0; } .qr-code { width: 35mm; height: 35mm; margin: 0 auto; display: block; } .terms { font-size: 8px; text-align: left; margin-top: 8px; line-height: 1.1; } .terms h4 { font-size: 9px; text-align: center; margin: 0 0 4px 0; border-bottom: 1px solid #000; padding-bottom: 2px; } .terms p { margin: 2px 0; }</style></head><body><div class="boleto"><img src="https://gisyiiljfplywcfhxxem.supabase.co/storage/v1/object/public/fls/WhatsApp%20Image%202026-05-04%20at%205.53.38%20PM.jpeg" class="logo" alt="Bonilla Tours" /><div class="text-center text-bold" style="font-size: 12px;">BOLETO DE VIAJE</div><div class="divider"></div><div class="item"><span class="label">Pasajero:</span> <span class="value">${item.cliente}</span></div><div class="item"><span class="label">Teléfono:</span> <span class="value">${item.telefono}</span></div><div class="dest-box"><div class="dest-label">RUTA</div><div class="dest-value">${item.origen} ➔ ${item.destino}</div></div><div class="item"><span class="label">Salida (Abordaje):</span> <span class="value">${item.fechaViaje} a las ${item.horaViaje} hrs</span></div><div class="item"><span class="label">Llegada Aprox:</span> <span class="value">${item.horaLlegada} hrs</span></div><div class="item"><span class="label">Tipo:</span> <span class="value">${item.tipo}</span></div><div class="item"><span class="label">Asiento(s):</span> <span class="value">${item.asientos.length > 0 ? item.asientos.join(', ') : 'Asignado al abordar'}</span></div><div class="item"><span class="label">Total Pagado:</span> <span class="value text-bold">$${Number(item.montoOriginal).toFixed(2)} MXN</span></div><div class="divider"></div><div class="qr-container"><img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}" alt="QR" /><div class="label" style="margin-top:4px;">Folio de Reserva</div><div class="text-bold" style="font-size: 13px;">${item.folio}</div><div style="font-size: 8px; margin-top: 4px;">Emitido: ${item.fechaCompleta}</div></div><div class="divider"></div><div class="terms"><h4>TÉRMINOS Y CONDICIONES</h4><p>- Preséntese 20 min antes de su viaje.</p><p>- Muestre el QR o este ticket impreso para abordar.</p><p>- Tolerancia máx de 5 min en espera.</p><p>- Puntos de ascenso/descenso sujetos a cambios.</p><p>- Cancelaciones: 10% de cargo, mín. 1 hr en oficina.</p></div></div><script>window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); }</script></body></html>`;
     printWindow.document.write(html); printWindow.document.close();
   };
 
@@ -913,7 +1030,7 @@ export default function AdminDashboard() {
                           <th className="px-3 py-2">Folio Original</th>
                           <th className="px-3 py-2">Pasajero</th>
                           <th className="px-3 py-2">Ruta de Ida</th>
-                          <th className="px-3 py-2">Tipo</th>
+                          <th className="px-3 py-2 text-right">Acción</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y text-gray-800">
@@ -925,8 +1042,17 @@ export default function AdminDashboard() {
                               <span className="text-xs text-gray-500">{t.passenger_phone || 'S/T'}</span>
                             </td>
                             <td className="px-3 py-3 text-xs">{t.origin} <br/>➔ {t.destination}</td>
-                            <td className="px-3 py-3 text-xs font-semibold">
-                              <span className="bg-gray-100 px-2 py-1 rounded">{t.is_15_days ? '15 Días' : 'Redondo'}</span>
+                            <td className="px-3 py-3 text-right">
+                              {/* BOTÓN PARA PROGRAMAR EL REGRESO DE ESTE BOLETO */}
+                              <button onClick={() => {
+                                setSelectedOpenTicket(t);
+                                setReturnSearchDate('');
+                                setReturnTrips([]);
+                                setSelectedReturnTrip(null);
+                                setShowReturnModal(true);
+                              }} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1 rounded-lg text-xs font-bold transition-colors">
+                                Programar Regreso
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -1376,7 +1502,88 @@ export default function AdminDashboard() {
           </>
         )}
 
-        {/* --- MODAL PARA EDITAR HORA Y ASIENTO (NUEVO) --- */}
+        {/* --- MODAL PARA PROGRAMAR REGRESO (FECHA ABIERTA) --- */}
+        {showReturnModal && selectedOpenTicket && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+              <div className="bg-amber-600 px-6 py-4 flex justify-between items-center text-white">
+                <h3 className="font-bold text-lg flex items-center gap-2"><Clock /> Programar Regreso</h3>
+                <button onClick={() => setShowReturnModal(false)} className="text-amber-200 hover:text-white"><XCircle /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
+                  <p className="text-sm font-bold text-amber-900">Pasajero: {selectedOpenTicket.passenger_name}</p>
+                  <p className="text-xs text-amber-700">Ruta de Regreso: <strong className="uppercase">{selectedOpenTicket.destination} ➔ {selectedOpenTicket.origin}</strong></p>
+                </div>
+
+                {!selectedReturnTrip ? (
+                  <form onSubmit={handleSearchReturnTrips} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Fecha de Regreso Deseada</label>
+                      <input type="date" required value={returnSearchDate} onChange={e => setReturnSearchDate(e.target.value)} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" />
+                    </div>
+                    <button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded-lg text-sm transition-colors">Buscar Autobuses de Regreso</button>
+
+                    {returnTrips.length > 0 && (
+                      <div className="mt-4 space-y-2 border-t pt-4">
+                        <h4 className="font-bold text-gray-700 text-sm">Autobuses Disponibles:</h4>
+                        {returnTrips.map((trip: any) => (
+                          <div key={trip.id} className="p-3 border rounded-lg cursor-pointer hover:bg-amber-50 hover:border-amber-400 transition-colors" onClick={() => handleSelectReturnTrip(trip)}>
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <span className="font-bold text-gray-800 block">{trip.departure_time}</span>
+                                <span className="text-xs text-gray-500">Ruta Base: {trip.origin} a {trip.destination}</span>
+                              </div>
+                              <span className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded-md font-semibold">{trip.bus_type}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </form>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-gray-100 p-2 rounded text-sm">
+                      <span className="font-bold">Hora elegida: {selectedReturnTrip.departure_time}</span>
+                      <button onClick={() => setSelectedReturnTrip(null)} className="text-blue-600 hover:underline text-xs font-bold">Cambiar Camión</button>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">Selecciona Asiento(s) para el Regreso</label>
+                      <div className="flex flex-wrap gap-2">
+                        {Array.from({ length: selectedReturnTrip.total_seats }).map((_, i) => {
+                          const seatNum = i + 1;
+                          const isOccupied = returnOccupiedSeats.includes(seatNum);
+                          const isSelected = returnSelectedSeats.includes(seatNum);
+                          return (
+                            <button
+                              key={seatNum} type="button" disabled={isOccupied} onClick={() => toggleReturnSeat(seatNum)}
+                              className={`w-10 h-10 rounded-md font-bold text-sm flex items-center justify-center transition-colors 
+                                ${isOccupied ? 'bg-red-100 text-red-400 cursor-not-allowed' : 
+                                  isSelected ? 'bg-amber-500 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            >
+                              {seatNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">Asientos seleccionados: {returnSelectedSeats.length === 0 ? 'Ninguno' : returnSelectedSeats.join(', ')}</p>
+                    </div>
+
+                    <div className="pt-4 flex gap-3 border-t mt-4">
+                      <button type="button" onClick={() => setShowReturnModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
+                      <button type="button" onClick={handleConfirmReturn} disabled={isSchedulingReturn || returnSelectedSeats.length === 0} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
+                        {isSchedulingReturn ? 'Procesando...' : 'Confirmar Regreso'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- MODAL PARA EDITAR HORA Y ASIENTO --- */}
         {showEditTripModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">

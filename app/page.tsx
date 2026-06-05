@@ -608,7 +608,7 @@ export default function AdminDashboard() {
               origin: taquillaForm.destination.trim(),
               destination: taquillaForm.origin.trim(),
               date: taquillaReturnDate,
-              departure_time: '22:00',
+              departure_time: '20:00',
               arrival_time: '08:00',
               duration: "Automático Regreso",
               price: taquillaSelectedTrip.price || 0,
@@ -819,7 +819,7 @@ export default function AdminDashboard() {
         available_seats: Number(tripForm.total_seats), 
         occupied_seats: [], 
         bus_type: tripForm.bus_type, 
-        amenities: ["WiFi", "A/C", "WC"],
+        amenities: ["A/C", "WC"],
       });
       if (error) throw error;
       await logAction('CREAR_VIAJE', `Programó viaje de ${tripForm.origin} a ${tripForm.destination} para el ${tripForm.date}`);

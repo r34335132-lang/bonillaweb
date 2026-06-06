@@ -70,6 +70,7 @@ export default function AdminDashboard() {
   const [taquillaPassenger, setTaquillaPassenger] = useState({ name: '', phone: '', status: 'confirmed-efectivo', priceOverride: '', tripType: 'sencillo' });
   const [isSelling, setIsSelling] = useState(false);
   const [taquillaOpenTickets, setTaquillaOpenTickets] = useState<any[]>([]);
+  const [taquillaWithCommission, setTaquillaWithCommission] = useState(false);
 
   // --- ESTADOS: FINANZAS Y MÉTRICAS (NUEVO) ---
   const [financeRecords, setFinanceRecords] = useState<any[]>([]);
@@ -520,6 +521,7 @@ export default function AdminDashboard() {
     }
     
     setTaquillaPassenger(prev => ({ ...prev, name: '', phone: '', status: 'confirmed-efectivo', priceOverride: finalPrice.toString() }));
+    setTaquillaWithCommission(false);
     setTaquillaSelectedTrip(trip);
   };
 
@@ -578,6 +580,7 @@ export default function AdminDashboard() {
         status: realStatus, 
         is_guest: true, 
         total_price: unitPrice * taquillaSelectedSeats.length, 
+        commission_amount: taquillaWithCommission ? (100 * taquillaSelectedSeats.length) : 0,
         origin: taquillaForm.origin, 
         destination: taquillaForm.destination, 
         seats: taquillaSelectedSeats, 
@@ -662,6 +665,7 @@ export default function AdminDashboard() {
       setTaquillaSelectedTrip(null);
       setTaquillaReturnDate(''); 
       setTaquillaOpenReturn(false);
+      setTaquillaWithCommission(false);
       fetchRealData();
       if (activeTab === 'taquilla') fetchOpenTickets();
     } catch (err: any) { alert("Error: " + err.message); } finally { setIsSelling(false); }
@@ -1181,6 +1185,17 @@ export default function AdminDashboard() {
                     </select>
                   </div>
 
+                  {/* NUEVA CAJA DE COMISIÓN */}
+                  <div className="mb-4 bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" id="withCommission" checked={taquillaWithCommission} onChange={(e) => setTaquillaWithCommission(e.target.checked)} className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500" />
+                      <label htmlFor="withCommission" className="text-sm font-bold text-gray-900 cursor-pointer">Vendido por Comisionista (-$100 de comisión por asiento)</label>
+                    </div>
+                    {taquillaWithCommission && (
+                      <p className="text-xs text-emerald-700 mt-1 ml-6">Se descontarán ${100 * taquillaSelectedSeats.length} MXN del ingreso neto que se reportará al sistema.</p>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Nombre Pasajero</label>
@@ -1191,20 +1206,28 @@ export default function AdminDashboard() {
                       <input type="text" value={taquillaPassenger.phone} onChange={e => setTaquillaPassenger({...taquillaPassenger, phone: e.target.value})} className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900" placeholder="10 dígitos" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Precio Unitario ($)</label>
                       <input type="number" required value={taquillaPassenger.priceOverride} onChange={e => setTaquillaPassenger({...taquillaPassenger, priceOverride: e.target.value})} className="w-full border rounded-lg p-2 text-sm font-bold text-emerald-700 bg-white" />
                     </div>
                   </div>
 
-                  <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg">
+                  <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg mt-4">
                     <label className="block text-xs font-bold text-orange-900 mb-1">Fecha de Registro de Venta</label>
                     <input type="date" required value={taquillaSaleDate} onChange={e => setTaquillaSaleDate(e.target.value)} className="w-full border rounded-lg p-2 text-sm text-orange-900 bg-white border-orange-300" />
                   </div>
 
+                  {/* NUEVA CAJA DE TOTAL QUE MUESTRA EL INGRESO NETO A CAJA */}
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mt-4 flex flex-col sm:flex-row justify-between items-center text-center sm:text-left gap-2">
-                    <span className="font-bold text-emerald-800">Total a Cobrar:</span>
+                    <div>
+                      <span className="font-bold text-emerald-800 block">Total del Boleto:</span>
+                      {taquillaWithCommission && (
+                        <span className="text-xs font-bold text-red-600 block mt-1">
+                          Ingreso Neto a Caja: ${(Number(taquillaPassenger.priceOverride) || 0) * taquillaSelectedSeats.length - (100 * taquillaSelectedSeats.length)}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-2xl font-black text-emerald-600">${(Number(taquillaPassenger.priceOverride) || 0) * taquillaSelectedSeats.length}</span>
                   </div>
 
